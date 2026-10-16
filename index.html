@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flying Tesla</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="wrap">
+    <header id="hud">
+      <div class="brand">FLYING TESLA</div>
+      <div class="scores">
+        <div class="stat">
+          <span>SCORE</span>
+          <b id="score">0</b>
+        </div>
+        <div class="stat">
+          <span>BEST</span>
+          <b id="best">0</b>
+        </div>
+      </div>
+      <button id="muteBtn" type="button" aria-label="Mute sound">SOUND ON</button>
+    </header>
+
+    <canvas id="game" width="1280" height="720"></canvas>
+
+    <button id="flyBtn" type="button" aria-label="Fly">
+      <span class="fly-label">FLY</span>
+      <span class="hint">SPACE</span>
+      <!-- Cooldown overlay fills from the top as the ability recharges. -->
+      <i id="cooldownBar"></i>
+    </button>
+  </div>
+
+  <div id="overlay" class="hidden" role="dialog" aria-labelledby="overlayTitle">
+    <div class="card">
+      <!-- Text is swapped by showOverlay() for the start and game over screens. -->
+      <p class="kicker" id="overlayKicker">RUN OVER</p>
+      <h1 id="overlayTitle">Game Over</h1>
+      <p class="result">Score <b id="finalScore">0</b> · Best <b id="finalBest">0</b></p>
+      <p class="result" id="overlayHelp" hidden>Tap <b>FLY</b> or press <b>Space</b> to hop over traffic.</p>
+      <button id="restartBtn" type="button">Restart</button>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
