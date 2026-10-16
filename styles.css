@@ -584,3 +584,4 @@ body {
   0%, 100% { opacity: 0.35; }
   50% { opacity: 1; }
 }
+#driverCredit { margin-top: 2px; font-size: 10px; color: var(--muted); opacity: 0.8; }

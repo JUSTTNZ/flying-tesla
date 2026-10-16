@@ -12,7 +12,7 @@
  */
 import { audio } from "./audio.js";
 import { CAMERAS, MODES, TESLA_COLORS } from "./config.js";
-import { DRIVERS, DRIVER_IDS, drawAvatar } from "./drivers.js";
+import { DRIVERS, DRIVER_IDS, drawAvatar, photoReady } from "./drivers.js";
 import { changeLane, createState, flip, tryFly, update } from "./game.js";
 import { createRenderer } from "./renderer.js";
 import { runSplash } from "./splash.js";
@@ -74,6 +74,8 @@ function updateLabels() {
   for (const b of driverBtns) b.setAttribute("aria-checked", String(b.dataset.driver === prefs.driver));
   const d = DRIVERS[prefs.driver];
   $("driverPerk").textContent = `${d.name} · ${d.perkText}`;
+  // Photo credit (required by the photos' licences) when the photo is shown.
+  $("driverCredit").textContent = photoReady(prefs.driver) ? `Photo: ${d.photo.credit} · Wikimedia Commons` : "";
   $("driverName").textContent = d.short;
   paintAvatar($("driverBadge"), prefs.driver);
 }
@@ -367,7 +369,7 @@ const paintPicker = () => driverBtns.forEach((b) => paintAvatar(b.querySelector(
 paintPicker();
 addEventListener("load", () => {
   paintPicker();
-  paintAvatar($("driverBadge"), prefs.driver);
+  updateLabels();
 });
 updateHud();
 requestAnimationFrame(frame);

@@ -1,9 +1,9 @@
 /**
  * Selectable drivers: a name, a small perk, and a portrait.
  *
- * Portraits are drawn cartoons (signature outfit, hair, glasses). If a photo
- * exists at assets/drivers/<id>.jpg (or .png) it's used instead; those files
- * are local only and not part of the public repo.
+ * Portraits use the photo at assets/drivers/<id>.jpg (freely licensed, from
+ * Wikimedia Commons; credits in assets/drivers/CREDITS.md and shown on the
+ * menu). If a photo can't load, a drawn cartoon is used instead.
  */
 import { roundRect } from "./utils.js";
 
@@ -14,6 +14,7 @@ export const DRIVERS = {
     short: "Elon",
     perkText: "2× Grok tokens",
     perks: { grokTokens: 2 },
+    photo: { cx: 0.5, cy: 0.37, size: 0.62, credit: "Gage Skidmore · CC BY-SA 4.0" },
     look: { skin: "#f0c8a8", hair: "#3a2a1e", style: "swept", outfit: "#15171c", collar: "tee" },
   },
   bezos: {
@@ -21,6 +22,7 @@ export const DRIVERS = {
     short: "Jeff",
     perkText: "Nitro lasts 1s longer",
     perks: { nitroExtra: 1 },
+    photo: { cx: 0.5, cy: 0.3, size: 0.6, credit: "U.S. Department of War · public domain" },
     look: { skin: "#f1c6a2", hair: null, style: "bald", outfit: "#2d4f7c", collar: "vest" },
   },
   pichai: {
@@ -28,6 +30,7 @@ export const DRIVERS = {
     short: "Sundar",
     perkText: "More gift boxes",
     perks: { giftRate: 1.6 },
+    photo: { cx: 0.49, cy: 0.41, size: 0.62, credit: "Lukasz Kobus, European Commission · CC BY 4.0" },
     look: { skin: "#b9805a", hair: "#1c1612", style: "short", outfit: "#5b6b7d", collar: "sweater", glasses: "rect" },
   },
   jensen: {
@@ -35,6 +38,7 @@ export const DRIVERS = {
     short: "Jensen",
     perkText: "1.5× flip bonus",
     perks: { flipBonus: 1.5 },
+    photo: { cx: 0.46, cy: 0.46, size: 0.6, credit: "The White House · public domain" },
     look: { skin: "#e6b98f", hair: "#16120f", style: "side", outfit: "#0b0b0d", collar: "leather" },
   },
   jobs: {
@@ -42,6 +46,7 @@ export const DRIVERS = {
     short: "Steve",
     perkText: "1.5× fly-over bonus",
     perks: { flyBonus: 1.5 },
+    photo: { cx: 0.48, cy: 0.41, size: 0.6, credit: "Matthew Yohe · CC BY-SA 3.0" },
     look: { skin: "#ecc3a0", hair: "#4a3d33", style: "receding", outfit: "#0f0f10", collar: "turtleneck", glasses: "round", stubble: true },
   },
 };
@@ -62,7 +67,7 @@ for (const id of DRIVER_IDS) {
   img.src = `assets/drivers/${id}.jpg`;
   photos[id] = img;
 }
-const photoReady = (id) => photos[id] && photos[id].complete && photos[id].naturalWidth > 0;
+export const photoReady = (id) => photos[id] && photos[id].complete && photos[id].naturalWidth > 0;
 
 /** Round portrait of a driver centred at (cx, cy) with radius r. */
 export function drawAvatar(c, id, cx, cy, r) {
@@ -71,9 +76,15 @@ export function drawAvatar(c, id, cx, cy, r) {
   c.arc(cx, cy, r, 0, Math.PI * 2);
   c.clip();
   if (photoReady(id)) {
+    // Square crop around the face (fractions of the photo, set per driver).
     const img = photos[id];
-    const s = Math.min(img.naturalWidth, img.naturalHeight);
-    c.drawImage(img, (img.naturalWidth - s) / 2, (img.naturalHeight - s) * 0.3, s, s, cx - r, cy - r, r * 2, r * 2);
+    const crop = DRIVERS[id].photo;
+    const iw = img.naturalWidth;
+    const ih = img.naturalHeight;
+    const s = iw * crop.size;
+    const sx = Math.max(0, Math.min(iw - s, iw * crop.cx - s / 2));
+    const sy = Math.max(0, Math.min(ih - s, ih * crop.cy - s / 2));
+    c.drawImage(img, sx, sy, s, s, cx - r, cy - r, r * 2, r * 2);
   } else {
     drawCartoon(c, DRIVERS[id].look, cx, cy, r);
   }

@@ -68,9 +68,10 @@ Open http://localhost:5173
 
 Pick a driver on the menu (or press D): Elon Musk (2× Grok tokens), Jeff Bezos
 (nitro lasts 1s longer), Sundar Pichai (more gift boxes), Jensen Huang (1.5×
-flip bonus) or Steve Jobs (1.5× fly-over bonus). Portraits are drawn cartoons;
-to use photos locally, put `elon.jpg`, `bezos.jpg`, `pichai.jpg`, `jensen.jpg`
-or `jobs.jpg` (or .png) in `assets/drivers/` — that folder isn't published.
+flip bonus) or Steve Jobs (1.5× fly-over bonus). Portraits are freely
+licensed photos from Wikimedia Commons (credits in
+[`assets/drivers/CREDITS.md`](assets/drivers/CREDITS.md), and shown on the menu
+for the selected driver); if a photo can't load, a drawn cartoon is used.
 
 The game pauses itself when you switch tabs.
 
