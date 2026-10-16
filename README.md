@@ -22,7 +22,8 @@ Open http://localhost:5173
 | Fly over traffic (2s hop, then a short cooldown) | Space | FLY button or tap |
 | Change lane | ↑ / ↓ (or W / S) | ▲ ▼ buttons or swipe |
 | Flip while in the air (tap = one flip, hold = keep flipping) | ← / → (or A / D) | ↺ ↻ |
-| Change camera (Side, Chase, Cinematic, Wide) | C | CAM button |
+| Change camera / POV (Side, Chase, Cinematic, Wide, Drone, Behind, Hood, Driver) | C | CAM button |
+| Pause / play | P or Esc | PAUSE button |
 | Tesla colour (white / black) | T | picker on the menu |
 | Mute | M | SOUND button |
 | Pick difficulty on the menu | 1 / 2 / 3 | Easy / Normal / Hard |
@@ -42,11 +43,31 @@ Open http://localhost:5173
   pack that one hop can clear, or far enough apart to land, recharge and hop
   again. Switching lanes gives you more ways out.
 
+## Cameras and POVs
+
+- **Side, Chase, Cinematic, Wide:** the side-on view at different zooms and angles.
+- **Drone:** a floaty camera drone with a REC/timecode HUD.
+- **Behind, Hood, Driver:** racing-game style views looking down the road
+  (`js/forward.js` projects the same simulation into perspective). Driver adds
+  the cabin, yoke and a Tesla-style centre screen; flips spin the whole view.
+
+## Nitro and traffic
+
+- Blue **N₂O canisters** sit in the lanes. Drive through one for 3.5s of nitro:
+  faster, double points, and any car in your way gets smashed aside (+100).
+  Protection lasts until you've landed and FLY has recharged after the boost.
+- Drivers honk and lean out to shout ("Excuse me sir!", "Move out, I'm late
+  for home!"), especially when you cut in or land in front of them.
+
+The game pauses itself when you switch tabs.
+
 ## The city
 
 Billboards along the street advertise SpaceX, xAI, Grok, Starship and Grok
 Bots; Grok Bot robots walk among the pedestrians (and talk back); and every so
-often a Starship launches behind the skyline. This is fan homage: brand names
+often a Starship launches behind the skyline. Picture billboards use images in
+`assets/` (see `IMAGE_ADS` in `js/billboards.js`); those files are not in the
+repo, and the game shows drawn ads in their place when they're missing. This is fan homage: brand names
 are styled text, not official logos, and the game is not affiliated with
 Tesla, SpaceX or xAI.
 
@@ -67,7 +88,9 @@ and thrusters, city rumble, crowd murmur, and people chattering and cheering
 | `js/vehicles.js` | Car shapes (Tesla, sedan, hatch, SUV, van, pickup) and drawing |
 | `js/skyline.js` | Three parallax building layers, pre-rendered offscreen |
 | `js/street.js` | Pavements, lanes, trees, lamps, pedestrians, Grok Bots, speech bubbles |
-| `js/billboards.js` | Roadside billboards and their ads |
+| `js/billboards.js` | Roadside billboards: drawn ads and picture ads from `assets/` |
+| `js/forward.js` | Behind / Hood / Driver forward views (perspective road) |
+| `js/pov.js` | Driver cabin, hood and drone HUD overlays |
 | `js/audio.js` | Web Audio: ambience beds and one-shot effects |
 | `js/storage.js` | Best score per mode and preferences in localStorage |
 | `js/config.js` | Tuning values, difficulty modes, cameras, scene layout |

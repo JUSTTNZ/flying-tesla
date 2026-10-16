@@ -8,8 +8,10 @@ import {
   FLY_DURATION, H, HOP_HEIGHT, PLAYER_DRAW_H, PLAYER_SCREEN_X, SIDEWALK_TOP,
   TESLA_COLORS, VIEW_PAD, W, laneGround,
 } from "./config.js";
+import { FORWARD_VIEWS, drawForward } from "./forward.js";
+import { drawPovOverlay } from "./pov.js";
 import { drawSkyline, renderSkyline } from "./skyline.js";
-import { drawStreet } from "./street.js";
+import { drawBubble, drawStreet } from "./street.js";
 import { clamp, glow, hexToRgb, lerpRgb, polyPath, rand, rgbStr, wrapAngle } from "./utils.js";
 import { VEHICLES, drawBeam, drawShadow, drawVehicle } from "./vehicles.js";
 
@@ -77,19 +79,29 @@ export function createRenderer(canvas) {
       const z = crashed ? 1.6 : 1.16 + (p.flying ? 0.2 : 0);
       const roll = p.flying ? -wrapAngle(p.rot) * 0.07 : 0;
       t = { zoom: z, x: px + 260 / z, y: py - 50 / z, rot: -0.035 + roll + Math.sin(clock * 0.4) * 0.01 };
+    } else if (mode === "drone") {
+      // Floaty drone shadowing the car from a little above.
+      const z = 1.08;
+      t = { zoom: z, x: px + 280 / z, y: py - 60 / z + Math.sin(clock * 1.3) * 4, rot: Math.sin(clock * 0.6) * 0.02 };
     } else if (mode === "wide") {
       // Zoomed out to see more traffic coming.
       t = { zoom: 0.86, x: W / 2 + 70, y: H / 2 - 10, rot: 0 };
     } else {
       t = { zoom: 1, x: W / 2, y: H / 2, rot: 0 };
     }
+    // Nitro punches the view out a little for a sense of speed.
+    if (p.nitro > 0) t.zoom *= 0.94;
     // Keep zoomed-in views inside the scene's top and bottom edges.
     if (t.zoom >= 1) {
       const half = H / 2 / t.zoom;
       t.y = clamp(t.y, half, H - half);
     }
-    const k = 1 - Math.exp(-dt * 3.5);
-    for (const key of ["x", "y", "zoom", "rot"]) cam[key] += (t[key] - cam[key]) * k;
+    // The drone lags behind for a floaty feel.
+    const rate = mode === "drone" ? 1.8 : 3.5;
+    const k = 1 - Math.exp(-dt * rate);
+    for (const key of ["x", "y", "zoom"]) cam[key] += (t[key] - cam[key]) * k;
+    // Rotate the short way round (a landed flip resets the angle by 2π).
+    cam.rot = wrapAngle(cam.rot + wrapAngle(t.rot - cam.rot) * k);
   }
 
     // `clock` drives ambient animation; `teslaColor` is a TESLA_COLORS key.
@@ -100,9 +112,20 @@ export function createRenderer(canvas) {
     sky.stops.forEach((c, i) => lerpRgb(c, pal.sky[i], k));
     lerpRgb(sky.haze, pal.haze, k);
 
-    updateCamera(state, camera, dt, clock);
     const sx = (Math.random() - 0.5) * state.shake;
     const sy = (Math.random() - 0.5) * state.shake;
+    const shades = TESLA_COLORS[teslaColor] || TESLA_COLORS.white;
+
+    // Racing-game style views looking down the road.
+    if (FORWARD_VIEWS[camera]) {
+      ctx.setTransform(scale, 0, 0, scale, sx * scale, sy * scale);
+      drawForward(ctx, state, camera, { clock, sky, teslaShades: shades, carAngle });
+      ctx.setTransform(scale, 0, 0, scale, 0, 0);
+      drawPovOverlay(ctx, camera, state, clock, shades);
+      return;
+    }
+
+    updateCamera(state, camera, dt, clock);
     ctx.setTransform(scale, 0, 0, scale, (W / 2 + sx) * scale, (H / 2 + sy) * scale);
     ctx.rotate(cam.rot);
     ctx.scale(cam.zoom, cam.zoom);
@@ -113,41 +136,107 @@ export function createRenderer(canvas) {
     if (rocket.active) drawRocket(ctx, rocket, clock);
     drawSkyline(ctx, rgbStr(sky.haze, "ALPHA"));
     drawStreet(ctx, state, clock);
-    drawTraffic(ctx, state, TESLA_COLORS[teslaColor] || TESLA_COLORS.white);
+    drawTraffic(ctx, state, shades, clock);
     drawPopups(ctx, state.popups);
+
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    drawPovOverlay(ctx, camera, state, clock);
   }
 
   resize();
   return { resize, draw };
 }
 
-// Cars far lane → near lane, with the Tesla slotted into its own lane
-// (or on top of everything while flying).
-function drawTraffic(c, state, teslaShades) {
+// Cars, nitro canisters and the Tesla, far lane → near lane (the Tesla on top
+// of everything while flying). `teslaShades` null hides the Tesla.
+function drawTraffic(c, state, teslaShades, clock) {
   const p = state.player;
   // Headlight beams first so no beam paints over another car's body.
   c.globalCompositeOperation = "lighter";
-  for (const car of state.cars) drawBeam(c, car.x, laneGround(car.lane) - car.h, car.w, car.h, car.spec);
+  for (const car of state.cars) {
+    if (!car.knocked) drawBeam(c, car.x, laneGround(car.lane) - car.h, car.w, car.h, car.spec);
+  }
   if (!p.flying) drawBeam(c, PLAYER_SCREEN_X, p.y, p.w, PLAYER_DRAW_H, VEHICLES.tesla);
   c.globalCompositeOperation = "source-over";
 
-  let teslaDrawn = false;
+  // Depth order: by lane, then left to right. Smashed cars fly over everything.
+  const items = [
+    ...state.pickups.map((pk) => ({ lane: pk.lane - 0.1, x: pk.x, draw: () => drawNitro(c, pk, clock) })),
+    ...state.cars.map((car) => ({
+      lane: car.knocked ? 98 : car.lane,
+      x: car.x,
+      draw: () => drawCar(c, car),
+    })),
+  ];
+  if (teslaShades) items.push({ lane: p.flying ? 99 : p.lanePos + 0.01, x: 0, draw: () => drawTesla(c, p, teslaShades, clock) });
+  items.sort((a, b) => a.lane - b.lane || a.x - b.x);
+  for (const it of items) it.draw();
+
+  // Drivers' speech bubbles on top so cars in nearer lanes don't hide them.
   for (const car of state.cars) {
-    if (!teslaDrawn && !p.flying && car.lane > p.lanePos + 0.01) {
-      drawTesla(c, p, teslaShades);
-      teslaDrawn = true;
+    if (car.bubble && car.bubbleT > 0 && car.bubbleT <= 2.2) {
+      const k = car.knocked || { x: 0, y: 0 };
+      const y = laneGround(car.lane) - car.h + k.y;
+      drawBubble(c, car.x + car.w * 0.62 + k.x, y - 6, car.bubble, Math.min(1, car.bubbleT * 3));
     }
-    const ground = laneGround(car.lane);
-    const y = ground - car.h;
-    drawShadow(c, car.x, car.w, 0, ground);
-    drawVehicle(c, car.x, y, car.w, car.h, car.spec, car.shades, car.wheelAngle);
-    if (car.honkT > 0) drawHonk(c, car, y);
   }
-  if (!teslaDrawn) drawTesla(c, p, teslaShades);
+}
+
+function drawCar(c, car) {
+  const ground = laneGround(car.lane);
+  const y = ground - car.h;
+  const k = car.knocked;
+  if (k) {
+    // Tumbling away after a nitro smash.
+    const cx = car.x + car.w / 2 + k.x;
+    const cy = y + car.h / 2 + k.y;
+    c.save();
+    c.globalAlpha = Math.max(0, 1 - k.t / 1.6);
+    c.translate(cx, cy);
+    c.rotate(k.rot);
+    c.translate(-car.x - car.w / 2, -y - car.h / 2);
+    drawVehicle(c, car.x, y, car.w, car.h, car.spec, car.shades, car.wheelAngle);
+    c.restore();
+    return;
+  }
+  drawShadow(c, car.x, car.w, 0, ground);
+  drawVehicle(c, car.x, y, car.w, car.h, car.spec, car.shades, car.wheelAngle);
+  if (car.honkT > 0) drawHonk(c, car, y, !(car.bubbleT > 0));
+}
+
+// Nitro canister floating over its lane, pulsing.
+function drawNitro(c, pk, clock) {
+  const ground = laneGround(pk.lane);
+  const bob = Math.sin(clock * 4 + pk.x * 0.01) * 4;
+  const x = pk.x;
+  const y = ground - 52 + bob;
+  c.fillStyle = "rgba(0, 0, 0, 0.35)";
+  c.beginPath();
+  c.ellipse(x + 17, ground + 2, 16, 4, 0, 0, Math.PI * 2);
+  c.fill();
+  c.save();
+  c.globalCompositeOperation = "lighter";
+  glow(c, x + 17, y + 22, 40 + Math.sin(clock * 6) * 6, "rgba(60, 200, 255, ALPHA)", 0.55);
+  c.restore();
+  const body = c.createLinearGradient(x, 0, x + 34, 0);
+  body.addColorStop(0, "#1559c7");
+  body.addColorStop(0.45, "#5ec8ff");
+  body.addColorStop(1, "#0d3a8a");
+  c.fillStyle = body;
+  roundRect(c, x + 3, y + 8, 28, 38, 7);
+  c.fill();
+  c.fillStyle = "#cfd8e4";
+  roundRect(c, x + 11, y, 12, 10, 3); // valve
+  c.fill();
+  c.fillStyle = "#ffffff";
+  c.font = "800 10px 'Avenir Next', 'Segoe UI', Helvetica, Arial, sans-serif";
+  c.textAlign = "center";
+  c.textBaseline = "middle";
+  c.fillText("N₂O", x + 17, y + 28);
 }
 
 // Sound lines and a "HONK!" over a honking car.
-function drawHonk(c, car, y) {
+function drawHonk(c, car, y, withText = true) {
   const fx = car.x + car.w + 6;
   const fy = y + car.h * 0.4;
   c.save();
@@ -160,10 +249,12 @@ function drawHonk(c, car, y) {
     c.arc(fx, fy, 6 + i * 6, -0.6, 0.6);
     c.stroke();
   }
-  c.font = "800 13px 'Avenir Next', 'Segoe UI', Helvetica, Arial, sans-serif";
-  c.textAlign = "center";
-  c.fillStyle = "#ffd166";
-  c.fillText("HONK!", car.x + car.w * 0.6, y - 8);
+  if (withText) {
+    c.font = "800 13px 'Avenir Next', 'Segoe UI', Helvetica, Arial, sans-serif";
+    c.textAlign = "center";
+    c.fillStyle = "#ffd166";
+    c.fillText("HONK!", car.x + car.w * 0.6, y - 8);
+  }
   c.restore();
 }
 
@@ -195,9 +286,19 @@ function drawSky(c, stars, clock, stops) {
   c.fill();
 }
 
-function drawTesla(c, p, shades) {
+// Flip angle, plus a slight nose-up / nose-down following the arc and a
+// little lean while changing lanes.
+function carAngle(p) {
+  const arcTilt = p.flying ? -Math.cos((p.flyT / FLY_DURATION) * Math.PI) * 0.06 : 0;
+  return p.rot + arcTilt + (p.lane - p.lanePos) * -0.12;
+}
+
+function drawTesla(c, p, shades, clock) {
   const x = PLAYER_SCREEN_X;
   const y = p.y;
+  if (p.nitro > 0) drawNitroTrail(c, p, clock);
+  // Blink during the grace period after a boost.
+  if (p.grace > 0 && Math.floor(clock * 14) % 2) return;
   const ground = laneGround(p.lanePos);
   drawShadow(c, x, p.w, p.hop / HOP_HEIGHT, ground);
 
@@ -221,15 +322,11 @@ function drawTesla(c, p, shades) {
     c.restore();
   }
 
-  // Flip angle, plus a slight nose-up / nose-down following the arc and a
-  // little lean while changing lanes.
-  const arcTilt = p.flying ? -Math.cos((p.flyT / FLY_DURATION) * Math.PI) * 0.06 : 0;
-  const laneLean = (p.lane - p.lanePos) * -0.12;
   const cx = x + p.w / 2;
   const cy = y + PLAYER_DRAW_H / 2;
   c.save();
   c.translate(cx, cy);
-  c.rotate(p.rot + arcTilt + laneLean);
+  c.rotate(carAngle(p));
   c.translate(-cx, -cy);
   drawVehicle(c, x, y, p.w, PLAYER_DRAW_H, VEHICLES.tesla, shades, p.wheelAngle);
   // A thin light rim keeps a black car visible against the night road.
@@ -245,6 +342,30 @@ function drawTesla(c, p, shades) {
   c.fill();
   c.fillStyle = "#c9d2de";
   c.fillRect(x + p.w * 0.56, y + PLAYER_DRAW_H * 0.46, 8, 2);
+  c.restore();
+}
+
+// Blue exhaust flames and speed streaks while boosting.
+function drawNitroTrail(c, p, clock) {
+  const x = PLAYER_SCREEN_X;
+  const ey = p.y + PLAYER_DRAW_H * 0.55;
+  c.save();
+  c.globalCompositeOperation = "lighter";
+  for (let i = 0; i < 9; i++) {
+    const len = 60 + ((i * 37 + Math.floor(clock * 30) * 13) % 140);
+    const ly = p.y + 6 + ((i * 17) % (PLAYER_DRAW_H - 8));
+    c.fillStyle = `rgba(150, 220, 255, ${0.08 + (i % 3) * 0.05})`;
+    c.fillRect(x - 40 - len, ly, len, 2);
+  }
+  const f = 1 + Math.sin(clock * 50) * 0.2;
+  glow(c, x - 6, ey, 34 * f, "rgba(80, 170, 255, ALPHA)", 0.8);
+  c.fillStyle = "rgba(200, 235, 255, 0.95)";
+  c.beginPath();
+  c.moveTo(x + 2, ey - 6);
+  c.lineTo(x - 30 * f, ey);
+  c.lineTo(x + 2, ey + 6);
+  c.closePath();
+  c.fill();
   c.restore();
 }
 

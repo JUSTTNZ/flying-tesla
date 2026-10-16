@@ -24,6 +24,7 @@
           <b id="best">0</b>
         </div>
       </div>
+      <button id="pauseBtn" class="pill" type="button" aria-label="Pause">❚❚ PAUSE</button>
       <button id="camBtn" class="pill" type="button" aria-label="Change camera">CAM · SIDE</button>
       <button id="muteBtn" class="pill" type="button" aria-label="Mute sound">SOUND ON</button>
     </header>
@@ -80,17 +81,30 @@
         <li><kbd>Space</kbd> fly over traffic</li>
         <li><kbd>↑</kbd><kbd>↓</kbd> change lane</li>
         <li><kbd>←</kbd><kbd>→</kbd> flip in the air (hold for more)</li>
-        <li><kbd>C</kbd> camera · <kbd>T</kbd> car colour · <kbd>M</kbd> sound</li>
+        <li><kbd>C</kbd> camera / POV · <kbd>T</kbd> car colour</li>
+        <li><kbd>P</kbd> pause · <kbd>M</kbd> sound</li>
       </ul>
       <ul class="controls touch">
         <li><b>FLY</b> hop over traffic</li>
         <li><b>▲ ▼</b> or swipe: change lane</li>
         <li><b>↺ ↻</b> in the air: flip (hold for more)</li>
       </ul>
-      <p class="tip">Every flip you land scores +300.</p>
+      <p class="tip">Grab blue N₂O canisters for a nitro boost. Every flip you land scores +300.</p>
 
       <button id="restartBtn" type="button">Start</button>
       <p class="fine">Fan-made game · not affiliated with Tesla, SpaceX or xAI</p>
+    </div>
+  </div>
+
+  <div id="pauseOverlay" class="hidden" role="dialog" aria-labelledby="pauseTitle">
+    <div class="card">
+      <p class="kicker">GAME PAUSED</p>
+      <h1 id="pauseTitle">Paused</h1>
+      <p class="result">Press <kbd>P</kbd> or <kbd>Esc</kbd> to keep playing.</p>
+      <div class="pause-actions">
+        <button id="resumeBtn" type="button">▶ Play</button>
+        <button id="pauseRestartBtn" class="secondary" type="button">Restart</button>
+      </div>
     </div>
   </div>
 

@@ -7,7 +7,8 @@
 import { audio } from "./audio.js";
 import {
   BASE_SPEED, BONUS, FLY_BOOST, FLY_DURATION, HOP_HEIGHT, LANES, LANE_SWITCH_SPEED,
-  MODES, PLAYER_DRAW_H, PLAYER_SCREEN_X, FLIP_TIME, SAFE_LANDING, SPAWN_X, START_LANE,
+  MODES, NITRO_GRACE, NITRO_SPEED, NITRO_TIME, PLAYER_DRAW_H, PLAYER_SCREEN_X,
+  FLIP_TIME, SAFE_LANDING, SMASH_BONUS, SPAWN_X, START_LANE, VIEW_PAD,
   TRICK_BONUS, W, laneGround,
 } from "./config.js";
 import { advanceSkyline, resetSkyline } from "./skyline.js";
@@ -25,6 +26,10 @@ const OUCH = ["Oh no!", "Ouch!", "Yikes!", "Call someone!", "Not again…"];
 const BOT_WOW = ["Nice flip, human.", "Trajectory: optimal", "Beep boop!", "Impressive.", "Logging that jump"];
 const BOT_OUCH = ["Error 404: road", "Rebooting…", "That was suboptimal", "Beep… oops"];
 const BOT_CHATTER = ["Hello, human!", "I grok traffic.", "Charging…", "Beep boop!", "Ask me anything", "To Mars!"];
+// Drivers leaning out of their cars.
+const DRIVER_ANGRY = ["Excuse me sir!", "Move out, I'm late for home!", "Hey! Watch it!", "Move it, buddy!", "Who taught you to drive?!"];
+const DRIVER_IDLE = ["Excuse me sir!", "Move out, I'm late for home!", "Come on, move!", "I'm late for dinner!", "Nice Tesla though", "Ugh, traffic…"];
+const DRIVER_SMASHED = ["My car!!", "Are you serious?!", "I'm late for home!", "Insurance won't cover THIS"];
 const CHATTER = ["Nice night!", "Taxi!", "Hey!", "So much traffic…", "Love this city", "Coffee?", "Running late!", "Hi!"];
 
 // `running` is false on the start screen and after a crash.
@@ -51,6 +56,8 @@ export function createState(running, mode = "normal") {
     stars: seedStars(),
     shake: 0,
     honkTimer: rand(2, 4),
+    pickups: [], // nitro canisters on the road
+    nextNitroAt: 1500 + rand(0, 1500),
     chatterTimer: rand(2, 5),
     player: {
       w: VEHICLES.tesla.w,
@@ -65,6 +72,9 @@ export function createState(running, mode = "normal") {
       wheelAngle: 0,
       rot: 0, // flip angle (rad); positive = clockwise = front flip
       targetRot: 0, // whole turns queued this flight; rot animates toward it
+      nitro: 0, // seconds of boost left
+      grace: 0, // seconds after a boost where hits still smash
+      graceHold: false, // grace is held until the Tesla is free to hop again
       spin: 0, // held flip input: -1 back, 0 none, 1 front (chains more flips)
     },
   };
@@ -121,7 +131,7 @@ export function changeLane(state, dir) {
   audio.lane();
   // Cutting in just ahead of someone gets you honked at.
   for (const car of state.cars) {
-    if (car.lane === next && car.x + car.w < PX && car.x + car.w > PX - 170) honk(car, 0.15);
+    if (car.lane === next && car.x + car.w < PX && car.x + car.w > PX - 170) honk(car, 0.15, DRIVER_ANGRY);
   }
 }
 
@@ -136,7 +146,8 @@ const BOOST_TRAVEL = (FLY_BOOST * FLY_DURATION * 2) / Math.PI;
 // Pick the next car for a lane. It is spawned once there is room for it.
 function planCar(state, lane, last) {
   const { cfg, level } = state;
-  const spec = VEHICLES[pick(NPC_TYPES)];
+  const type = pick(NPC_TYPES);
+  const spec = VEHICLES[type];
   const scale = rand(0.94, 1.08);
   const P = state.playerSpeed;
   const w = spec.w * scale;
@@ -150,6 +161,7 @@ function planCar(state, lane, last) {
   }
   return {
     lane,
+    type,
     spec,
     w,
     h: spec.h * scale,
@@ -200,6 +212,7 @@ function spawnCars(state) {
       w: car.w,
       h: car.h,
       speed: car.speed,
+      type: car.type,
       spec: car.spec,
       pack: car.pack,
       shades: paintShades(pick(CAR_COLORS)),
@@ -209,6 +222,9 @@ function spawnCars(state) {
       jumped: false, // flown over by the Tesla
       whooshed: false,
       passed: false,
+      knocked: null, // set when smashed by a nitro boost
+      bubble: "", // driver shouting
+      bubbleT: 0,
     });
   }
 }
@@ -219,6 +235,16 @@ function updateTraffic(state, dt) {
     car.x -= (state.scrollSpeed - car.speed) * dt;
     car.wheelAngle += (car.speed * dt) / (car.spec.r * car.h);
     car.honkT = Math.max(0, car.honkT - dt);
+    car.bubbleT = Math.max(0, car.bubbleT - dt);
+    // Smashed cars tumble up and away.
+    const k = car.knocked;
+    if (k) {
+      k.t += dt;
+      k.x += k.vx * dt;
+      k.y += k.vy * dt;
+      k.vy += 1500 * dt;
+      k.rot += k.spin * dt;
+    }
   }
 
   // Bunching: a faster car behind cannot pass the slower car ahead in its lane.
@@ -227,20 +253,28 @@ function updateTraffic(state, dt) {
   for (let i = 0; i < state.cars.length - 1; i++) {
     const behind = state.cars[i];
     const ahead = state.cars[i + 1];
-    if (behind.lane !== ahead.lane) continue;
+    if (behind.lane !== ahead.lane || behind.knocked || ahead.knocked) continue;
     const gap = 18;
     if (behind.x + behind.w + gap > ahead.x) {
       behind.x = ahead.x - behind.w - gap;
       behind.speed = Math.min(behind.speed, ahead.speed);
     }
   }
-  state.cars = state.cars.filter((c) => c.x + c.w > -340);
+  state.cars = state.cars.filter((c) => c.x + c.w > -340 && !(c.knocked && c.knocked.t > 1.6));
 }
 
-function honk(car, delay = 0) {
-  if (car.honkT > 0) return;
+// Honk, and maybe have the driver shout one of `lines`.
+function honk(car, delay = 0, lines = null) {
+  if (car.honkT > 0 || car.knocked) return;
   car.honkT = 0.5 + delay;
   audio.honk(panAt(car.x + car.w), car.horn, delay);
+  if (lines) driverSay(car, pick(lines), delay);
+}
+
+function driverSay(car, text, delay = 0) {
+  car.bubble = text;
+  car.bubbleT = 2.2 + delay; // shown once it drops to 2.2 (after the delay)
+  audio.chatter(panAt(car.x + car.w / 2), Math.random() < 0.5, delay + 0.1);
 }
 
 // Random honks from visible traffic, more often on later levels.
@@ -248,8 +282,9 @@ function ambientHonks(state, dt) {
   state.honkTimer -= dt;
   if (state.honkTimer > 0) return;
   state.honkTimer = rand(2.5, 6) / (1 + 0.15 * (state.level - 1));
-  const visible = state.cars.filter((c) => c.x > 0 && c.x < W - 60);
-  if (visible.length) honk(pick(visible));
+  const visible = state.cars.filter((c) => c.x > 0 && c.x < W - 60 && !c.knocked);
+  // More than half the time the driver shouts something too.
+  if (visible.length) honk(pick(visible), 0, Math.random() < 0.6 ? DRIVER_IDLE : null);
 }
 
 // ---------------------------------------------------------------------------
@@ -320,17 +355,35 @@ export function update(state, dt) {
   p.lanePos += Math.sign(dl) * Math.min(Math.abs(dl), LANE_SWITCH_SPEED * dt);
   p.y = laneGround(p.lanePos) - PLAYER_DRAW_H - p.hop;
 
+  // Nitro: faster and double points. Afterwards hits keep smashing until the
+  // Tesla has landed and FLY has recharged, plus a moment to react — the boost
+  // can leave you mid-cooldown right in front of a car otherwise.
+  if (p.nitro > 0) {
+    p.nitro = Math.max(0, p.nitro - dt);
+    if (p.nitro === 0) {
+      p.grace = NITRO_GRACE;
+      p.graceHold = true;
+    }
+  } else if (p.graceHold && (p.flying || p.cooldown > 0)) {
+    p.grace = NITRO_GRACE;
+  } else {
+    p.graceHold = false; // once free, the grace runs out even if you hop again
+    p.grace = Math.max(0, p.grace - dt);
+  }
+  const boost = p.nitro > 0 ? NITRO_SPEED : 1;
+
   // The world scrolls faster mid-flight so the Tesla actually gets past traffic.
-  state.scrollSpeed = state.playerSpeed * (1 + FLY_BOOST * lift);
+  state.scrollSpeed = state.playerSpeed * (1 + FLY_BOOST * lift) * boost;
   const scroll = state.scrollSpeed * dt;
   state.distance += scroll;
-  state.score += scroll * 0.12;
+  state.score += scroll * 0.12 * (p.nitro > 0 ? 2 : 1);
   p.wheelAngle += scroll / (VEHICLES.tesla.r * PLAYER_DRAW_H);
   advanceSkyline(scroll);
   updatePeds(state, dt, state.scrollSpeed);
 
   spawnCars(state);
   updateTraffic(state, dt);
+  updatePickups(state, dt);
   ambientHonks(state, dt);
   ambientChatter(state, dt);
   return checkCars(state) ? crash(state, "Crashed into traffic") : null;
@@ -383,7 +436,7 @@ function land(state) {
   // Landing right in front of someone gets you honked at.
   for (const car of state.cars) {
     if (sameLane(car, p) && car.x + car.w < PX && car.x + car.w > PX - 160 && Math.random() < 0.8) {
-      honk(car, 0.15);
+      honk(car, 0.15, DRIVER_ANGRY);
     }
   }
   return true;
@@ -403,9 +456,15 @@ function checkCars(state) {
   for (const car of state.cars) {
     const overlapX = car.x < PX + p.w && car.x + car.w > PX;
     const inLane = sameLane(car, p);
+    if (car.knocked) continue;
     if (overlapX && inLane) {
-      if (!p.flying) return true;
-      car.jumped = true;
+      if (!p.flying) {
+        // Boosting (or just after) smashes cars out of the way instead.
+        if (p.nitro > 0 || p.grace > 0) smash(state, car);
+        else return true;
+      } else {
+        car.jumped = true;
+      }
     }
     // Whoosh as a car goes by (louder in nearby lanes).
     if (!car.whooshed && car.x < PX + p.w * 0.5) {
@@ -423,6 +482,48 @@ function checkCars(state) {
     }
   }
   return false;
+}
+
+// Knock a car tumbling out of the way.
+function smash(state, car) {
+  car.knocked = { t: 0, x: 0, y: 0, vx: rand(120, 260), vy: -rand(420, 560), rot: 0, spin: rand(-9, 9) };
+  car.passed = true;
+  state.score += SMASH_BONUS;
+  state.shake = Math.max(state.shake, 5);
+  addPopup(state, `SMASH +${SMASH_BONUS}`, "#ff8a4c");
+  audio.smash(panAt(car.x));
+  driverSay(car, pick(DRIVER_SMASHED));
+}
+
+// ---------------------------------------------------------------------------
+// Nitro pickups
+// ---------------------------------------------------------------------------
+function updatePickups(state, dt) {
+  const p = state.player;
+  // Drop a canister into a lane that's clear around the spawn point.
+  if (state.distance >= state.nextNitroAt) {
+    const free = LANES.map((_, i) => i).filter(
+      (lane) => !state.cars.some((c) => c.lane === lane && Math.abs(c.x - SPAWN_X) < 260),
+    );
+    if (free.length) {
+      state.pickups.push({ x: SPAWN_X, lane: pick(free) });
+      state.nextNitroAt = state.distance + rand(2600, 4600);
+    }
+  }
+  // Canisters sit on the road, so they scroll with it.
+  for (const pk of state.pickups) pk.x -= state.scrollSpeed * dt;
+  state.pickups = state.pickups.filter((pk) => {
+    const hit = Math.abs(pk.lane - p.lanePos) < 0.55 && pk.x < PX + p.w && pk.x + 34 > PX && p.hop < 40;
+    if (hit) {
+      p.nitro = NITRO_TIME;
+      p.grace = 0;
+      p.graceHold = false;
+      addPopup(state, "NITRO!", "#5ee8ff");
+      audio.nitro();
+      return false;
+    }
+    return pk.x > -VIEW_PAD;
+  });
 }
 
 function crash(state, reason) {

@@ -1,3 +1,8 @@
 .DS_Store
-# Unused concept image of unknown origin; kept local only.
+# Third-party photos/logos used for local billboards. Not published: they are
+# other people's copyrighted images. The game falls back to drawn ads without them.
 assets/hero.png
+assets/images.png
+assets/images.jpeg
+assets/images (1).jpeg
+assets/images (2).jpeg

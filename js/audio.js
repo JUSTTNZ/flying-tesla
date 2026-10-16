@@ -36,6 +36,14 @@ export const audio = {
     if (this.ctx.state === "suspended") this.ctx.resume();
   },
 
+  // Freeze / resume all sound (pause screen).
+  pause() {
+    if (this.ctx && this.ctx.state === "running") this.ctx.suspend();
+  },
+  resume() {
+    if (this.ctx && this.ctx.state === "suspended") this.ctx.resume();
+  },
+
   setMuted(muted) {
     this.muted = muted;
     if (this.master) this.master.gain.setTargetAtTime(muted ? 0 : MASTER, this.ctx.currentTime, 0.05);
@@ -156,9 +164,9 @@ export const audio = {
   },
 
   // Muffled "talking": a few formant-filtered syllables.
-  chatter(pan = 0, high = Math.random() < 0.5) {
+  chatter(pan = 0, high = Math.random() < 0.5, delay = 0) {
     const n = 3 + ((Math.random() * 3) | 0);
-    let d = 0;
+    let d = delay;
     for (let i = 0; i < n; i++) {
       const dur = rand(0.06, 0.12);
       this.voice({
@@ -167,6 +175,18 @@ export const audio = {
       });
       d += dur + rand(0.02, 0.06);
     }
+  },
+
+  // Nitro: rising whine plus a rush of air.
+  nitro() {
+    this.voice({ type: "sawtooth", freq: 220, slide: 1200, dur: 0.6, gain: 0.05, filter: ["lowpass", 2500, 1] });
+    this.noise({ dur: 1.2, gain: 0.12, type: "bandpass", f0: 600, f1: 3000, q: 0.6, attack: 0.05 });
+  },
+
+  // Boosting through a car: crunch and a thud.
+  smash(pan = 0) {
+    this.noise({ dur: 0.35, gain: 0.22, type: "lowpass", f0: 3000, f1: 300, pan });
+    this.voice({ type: "square", freq: 110, slide: 50, dur: 0.25, gain: 0.06, pan });
   },
 
   // Grok Bot talking: quick square-wave bleeps.

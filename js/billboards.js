@@ -1,6 +1,6 @@
 /**
- * Roadside billboards with in-world ads (SpaceX, xAI, Grok, Starship,
- * Grok Bots). Fan homage: brand names are plain styled text, not logo artwork.
+ * Roadside billboards: drawn in-world ads (SpaceX, xAI, Grok, Starship,
+ * Grok Bots) taking turns with picture billboards loaded from assets/.
  *
  * Billboards stand on the far pavement every BILLBOARD_SPACING world px,
  * between the trees and lamps, raised above both.
@@ -157,66 +157,161 @@ const ADS = [
   },
 ];
 
+// ---------------------------------------------------------------------------
+// Image billboards: pictures from assets/, shown bigger than the drawn ads.
+// `focusY` (0 top … 1 bottom) picks which part stays in view when the picture
+// is cropped to the sign's shape. Pictures that fail to load (e.g. not
+// deployed) fall back to the drawn ad named in `fallback`.
+// ---------------------------------------------------------------------------
+const IMAGE_W = 256;
+const IMAGE_H = 136;
+
+function loadImage(src) {
+  const img = new Image();
+  img.src = encodeURI(src);
+  return img;
+}
+
+const ready = (img) => img.complete && img.naturalWidth > 0;
+
+const [SPACEX, XAI, GROK, STARSHIP, GROK_BOTS] = ADS;
+
+const IMAGE_ADS = [
+  { src: "assets/images.png", focusY: 0.5, light: "rgba(220, 230, 255, ALPHA)", fallback: SPACEX },
+  { src: "assets/images (1).jpeg", focusY: 0.5, light: "rgba(255, 170, 110, ALPHA)", fallback: GROK_BOTS },
+  { src: "assets/images.jpeg", focusY: 0.4, light: "rgba(230, 235, 255, ALPHA)", fallback: STARSHIP },
+  { src: "assets/images (2).jpeg", focusY: 0.45, light: "rgba(230, 225, 215, ALPHA)", fallback: XAI },
+  { src: "assets/hero.png", focusY: 0.28, light: "rgba(120, 200, 255, ALPHA)", fallback: GROK },
+].map((ad) => ({ ...ad, img: loadImage(ad.src) }));
+
+// Order along the road: pictures and drawn ads take turns.
+const ROTATION = [
+  IMAGE_ADS[0], XAI, IMAGE_ADS[1], GROK, IMAGE_ADS[2], STARSHIP,
+  IMAGE_ADS[3], GROK_BOTS, IMAGE_ADS[4], SPACEX,
+];
+
 export function drawBillboards(c, distance, clock) {
   const first = Math.floor((distance - BILLBOARD_PHASE) / BILLBOARD_SPACING) - 1;
   for (let k = first; ; k++) {
     const x = k * BILLBOARD_SPACING + BILLBOARD_PHASE - distance;
-    if (x - BW > W + VIEW_PAD) break;
-    if (x + BW > -VIEW_PAD) drawBillboard(c, x, ADS[mod(k, ADS.length)], clock);
+    if (x - IMAGE_W > W + VIEW_PAD) break;
+    if (x + IMAGE_W < -VIEW_PAD) continue;
+    let ad = ROTATION[mod(k, ROTATION.length)];
+    if (ad.img && !ready(ad.img)) ad = ad.fallback;
+    if (ad.img) drawBillboard(c, x, IMAGE_W, IMAGE_H, ad, clock);
+    else drawBillboard(c, x, BW, BH, ad, clock);
   }
 }
 
-function drawBillboard(c, x, ad, clock) {
-  const l = x - BW / 2;
+// Billboards whose centre (side-view screen x) lies in [minX, maxX], with
+// unloaded pictures already swapped for their fallback ads.
+export function billboardsBetween(distance, minX, maxX) {
+  const out = [];
+  const first = Math.floor((distance + minX - BILLBOARD_PHASE) / BILLBOARD_SPACING);
+  for (let k = first; ; k++) {
+    const x = k * BILLBOARD_SPACING + BILLBOARD_PHASE - distance;
+    if (x > maxX) break;
+    if (x < minX) continue;
+    let ad = ROTATION[mod(k, ROTATION.length)];
+    if (ad.img && !ready(ad.img)) ad = ad.fallback;
+    out.push({ x, ad });
+  }
+  return out;
+}
+
+// Paint an ad's artwork into any rectangle (used by the forward view).
+export function drawAd(c, ad, l, t, w, h, clock) {
+  c.save();
+  c.beginPath();
+  c.rect(l, t, w, h);
+  c.clip();
+  if (ad.img) {
+    drawCover(c, ad.img, ad.focusY, l, t, w, h);
+  } else {
+    // Drawn ads are laid out for a BW×BH panel; scale that to fit.
+    c.translate(l, t);
+    c.scale(w / BW, h / BH);
+    const g = c.createLinearGradient(0, 0, 0, BH);
+    g.addColorStop(0, ad.bg[0]);
+    g.addColorStop(1, ad.bg[1]);
+    c.fillStyle = g;
+    c.fillRect(0, 0, BW, BH);
+    c.textAlign = "left";
+    c.textBaseline = "alphabetic";
+    ad.paint(c, 0, 0, BW, BH, clock);
+  }
+  c.restore();
+}
+
+// Draw `img` cropped to fill the w×h box ("cover"), keeping focusY in view.
+function drawCover(c, img, focusY, l, t, w, h) {
+  const iw = img.naturalWidth;
+  const ih = img.naturalHeight;
+  const scale = Math.max(w / iw, h / ih);
+  const sw = w / scale;
+  const sh = h / scale;
+  const sx = (iw - sw) / 2;
+  const sy = (ih - sh) * focusY;
+  c.drawImage(img, sx, sy, sw, sh, l, t, w, h);
+}
+
+function drawBillboard(c, x, bw, bh, ad, clock) {
+  const l = x - bw / 2;
+  const bottom = TOP + BH; // every sign sits on the same catwalk height
+  const top = bottom - bh;
   const base = SIDEWALK_TOP + 12;
 
   // Light the sign throws onto the buildings behind it.
   c.save();
   c.globalCompositeOperation = "lighter";
-  glow(c, x, TOP + BH / 2, 190, ad.light, 0.16);
+  glow(c, x, top + bh / 2, bw * 0.85, ad.light, 0.16);
   c.restore();
 
   // Twin legs and a catwalk.
   c.fillStyle = "#1a2029";
-  c.fillRect(x - 44, TOP + BH, 8, base - TOP - BH);
-  c.fillRect(x + 36, TOP + BH, 8, base - TOP - BH);
-  c.fillRect(l - 6, TOP + BH + 4, BW + 12, 5);
+  c.fillRect(x - 44, bottom, 8, base - bottom);
+  c.fillRect(x + 36, bottom, 8, base - bottom);
+  c.fillRect(l - 6, bottom + 4, bw + 12, 5);
   c.fillRect(x - 46, base - 4, 12, 4);
   c.fillRect(x + 34, base - 4, 12, 4);
 
   // Frame and panel.
   c.fillStyle = "#0d1016";
-  roundRect(c, l - 6, TOP - 6, BW + 12, BH + 12, 4);
+  roundRect(c, l - 6, top - 6, bw + 12, bh + 12, 4);
   c.fill();
-  const g = c.createLinearGradient(0, TOP, 0, TOP + BH);
-  g.addColorStop(0, ad.bg[0]);
-  g.addColorStop(1, ad.bg[1]);
-  c.fillStyle = g;
-  c.fillRect(l, TOP, BW, BH);
 
   c.save();
   c.beginPath();
-  c.rect(l, TOP, BW, BH);
+  c.rect(l, top, bw, bh);
   c.clip();
-  c.textAlign = "left";
-  c.textBaseline = "alphabetic";
-  ad.paint(c, l, TOP, BW, BH, clock);
+  if (ad.img) {
+    drawCover(c, ad.img, ad.focusY, l, top, bw, bh);
+  } else {
+    const g = c.createLinearGradient(0, top, 0, bottom);
+    g.addColorStop(0, ad.bg[0]);
+    g.addColorStop(1, ad.bg[1]);
+    c.fillStyle = g;
+    c.fillRect(l, top, bw, bh);
+    c.textAlign = "left";
+    c.textBaseline = "alphabetic";
+    ad.paint(c, l, top, bw, bh, clock);
+  }
   // Spotlights wash the top of the sign.
-  const wash = c.createLinearGradient(0, TOP, 0, TOP + BH * 0.6);
+  const wash = c.createLinearGradient(0, top, 0, top + bh * 0.6);
   wash.addColorStop(0, "rgba(255, 245, 220, 0.18)");
   wash.addColorStop(1, "rgba(255, 245, 220, 0)");
   c.fillStyle = wash;
-  c.fillRect(l, TOP, BW, BH);
+  c.fillRect(l, top, bw, bh);
   c.restore();
 
   // Three spotlights on arms above the sign.
   for (const f of [0.2, 0.5, 0.8]) {
-    const sx = l + BW * f;
+    const sx = l + bw * f;
     c.fillStyle = "#1a2029";
-    c.fillRect(sx - 1, TOP - 16, 2, 10);
+    c.fillRect(sx - 1, top - 16, 2, 10);
     c.fillStyle = "#fff3d6";
-    roundRect(c, sx - 6, TOP - 19, 12, 5, 2);
+    roundRect(c, sx - 6, top - 19, 12, 5, 2);
     c.fill();
-    glow(c, sx, TOP - 16, 14, "rgba(255, 240, 200, ALPHA)", 0.5);
+    glow(c, sx, top - 16, 14, "rgba(255, 240, 200, ALPHA)", 0.5);
   }
 }

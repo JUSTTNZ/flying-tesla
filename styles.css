@@ -153,7 +153,7 @@ body {
   pointer-events: none;
 }
 
-#overlay {
+#overlay, #pauseOverlay {
   position: fixed;
   inset: 0;
   z-index: 10;
@@ -163,7 +163,7 @@ body {
   backdrop-filter: blur(8px);
 }
 
-#overlay.hidden { display: none; }
+#overlay.hidden, #pauseOverlay.hidden { display: none; }
 
 .card {
   width: min(92vw, 420px);
@@ -185,7 +185,7 @@ body {
 .result { margin: 12px 0 24px; color: var(--muted); }
 .result b { color: var(--ink); }
 
-#restartBtn {
+#restartBtn, #resumeBtn, #pauseRestartBtn {
   border: 0;
   background: #fff;
   color: #081018;
@@ -196,7 +196,7 @@ body {
   cursor: pointer;
 }
 
-#restartBtn:hover { background: #cfeeff; }
+#restartBtn:hover, #resumeBtn:hover { background: #cfeeff; }
 
 @media (max-width: 720px) {
   #flyBtn { width: 104px; height: 104px; right: 16px; bottom: 16px; }
@@ -368,3 +368,17 @@ body {
 .color-btn[aria-checked="true"] { border-color: var(--accent); background: rgba(62, 198, 255, 0.15); }
 
 .fine { margin-top: 14px; font-size: 10px; color: var(--muted); opacity: 0.7; }
+
+/* Pause screen */
+.pause-actions { display: flex; gap: 10px; justify-content: center; }
+#pauseRestartBtn.secondary { background: transparent; color: var(--ink); border: 1px solid rgba(255, 255, 255, 0.25); }
+#pauseRestartBtn.secondary:hover { border-color: var(--accent); }
+#pauseOverlay kbd {
+  padding: 1px 6px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 12px;
+}
+.pill:disabled { opacity: 0.4; cursor: default; }

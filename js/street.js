@@ -187,7 +187,7 @@ function drawRobot(c, ped) {
   }
 }
 
-function drawBubble(c, x, y, text, alpha) {
+export function drawBubble(c, x, y, text, alpha) {
   c.save();
   c.globalAlpha = alpha;
   c.font = "700 12px 'Avenir Next', 'Segoe UI', Helvetica, Arial, sans-serif";

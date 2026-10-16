@@ -73,6 +73,25 @@ export function drawSkyline(c, haze) {
   });
 }
 
+// Far and mid layers squeezed into a band sitting on `horizonY` (forward
+// view). `shift` slides them sideways (lane changes) for a little parallax.
+export function drawHorizon(c, horizonY, shift, haze) {
+  const sc = 0.5;
+  const w = SKYLINE_PERIOD * sc;
+  const h = SIDEWALK_TOP * sc;
+  layers.slice(0, 2).forEach((layer, i) => {
+    const off = mod(layer.offset * 0.4 + shift * (i + 1) * 0.3, w);
+    for (let x = -off - w; x < W + VIEW_PAD; x += w) {
+      c.drawImage(layer.canvas, x, horizonY - h + 6, w, h);
+    }
+    const g = c.createLinearGradient(0, horizonY - h, 0, horizonY);
+    g.addColorStop(0, haze.replace("ALPHA", 0));
+    g.addColorStop(1, haze.replace("ALPHA", i === 0 ? 0.5 : 0.3));
+    c.fillStyle = g;
+    c.fillRect(-VIEW_PAD, horizonY - h, W + VIEW_PAD * 2, h + 6);
+  });
+}
+
 function drawBuilding(g, depth, x, y, w, h, rnd) {
   if (depth === 0) drawFarBuilding(g, x, y, w, h, rnd);
   else if (depth === 1) drawMidBuilding(g, x, y, w, h, rnd);

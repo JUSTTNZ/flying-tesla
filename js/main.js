@@ -21,6 +21,8 @@ const flyBtn = $("flyBtn");
 const cooldownBar = $("cooldownBar");
 const muteBtn = $("muteBtn");
 const camBtn = $("camBtn");
+const pauseBtn = $("pauseBtn");
+const pauseOverlay = $("pauseOverlay");
 const overlay = $("overlay");
 const restartBtn = $("restartBtn");
 const banner = $("banner");
@@ -36,6 +38,7 @@ audio.setMuted(prefs.muted);
 
 const renderer = createRenderer($("game"));
 let state = createState(false, prefs.mode);
+let paused = false;
 
 // Held flip keys/buttons (holding chains flips); applied to the player every frame.
 const spinHeld = { back: false, front: false };
@@ -50,7 +53,8 @@ function updateHud() {
   $("level").textContent = state.level;
   const p = state.player;
   const cooling = p.cooldown > 0;
-  flyBtn.disabled = p.flying || cooling || !state.running;
+  flyBtn.disabled = p.flying || cooling || !state.running || paused;
+  pauseBtn.disabled = !state.running;
   // Dark overlay on the button: full while flying, draining during cooldown.
   const ratio = cooling ? p.cooldown / state.cfg.cooldown : p.flying ? 1 : 0;
   cooldownBar.style.height = `${ratio * 100}%`;
@@ -89,6 +93,7 @@ function showBanner(html) {
 // Actions
 // ---------------------------------------------------------------------------
 function start() {
+  setPaused(false);
   audio.ensure();
   state = createState(true, prefs.mode);
   overlay.classList.add("hidden");
@@ -96,12 +101,29 @@ function start() {
   updateHud();
 }
 
+// Pause / play. Only a run in progress can be paused.
+function setPaused(on) {
+  if (on && !state.running) return;
+  paused = on;
+  spinHeld.back = spinHeld.front = false;
+  pauseOverlay.classList.toggle("hidden", !on);
+  pauseBtn.textContent = on ? "▶ PLAY" : "❚❚ PAUSE";
+  if (on) {
+    audio.pause();
+    $("resumeBtn").focus();
+  } else {
+    audio.resume();
+  }
+}
+
 function fly() {
+  if (paused) return;
   audio.ensure();
   tryFly(state);
 }
 
 function lane(dir) {
+  if (paused) return;
   audio.ensure();
   changeLane(state, dir);
 }
@@ -151,6 +173,18 @@ addEventListener("keydown", (e) => {
   const k = e.code;
   if (["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(k)) e.preventDefault();
   if (e.repeat && k !== "Space") return;
+  if (k === "KeyP" || k === "Escape") {
+    setPaused(!paused);
+    return;
+  }
+  if (paused) {
+    // While paused only Space (resume) and the view toggles work.
+    if (k === "Space" && !e.repeat) setPaused(false);
+    if (k === "KeyC") cycleCamera();
+    if (k === "KeyT") toggleColor();
+    if (k === "KeyM") toggleMute();
+    return;
+  }
   if (k === "Space") {
     if (state.running) fly();
     else if (!e.repeat) start();
@@ -235,6 +269,13 @@ $("game").addEventListener("pointerup", (e) => {
 });
 
 restartBtn.addEventListener("click", start);
+pauseBtn.addEventListener("click", () => setPaused(!paused));
+$("resumeBtn").addEventListener("click", () => setPaused(false));
+$("pauseRestartBtn").addEventListener("click", start);
+// Switching tabs or apps pauses the run.
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden && state.running) setPaused(true);
+});
 muteBtn.addEventListener("click", toggleMute);
 camBtn.addEventListener("click", cycleCamera);
 for (const b of modeBtns) b.addEventListener("click", () => setMode(b.dataset.mode));
@@ -253,13 +294,13 @@ function frame(now) {
   clock += dt;
 
   state.player.spin = (spinHeld.front ? 1 : 0) - (spinHeld.back ? 1 : 0);
-  if (update(state, dt) === "crash") showOverlay("over");
+  if (!paused && update(state, dt) === "crash") showOverlay("over");
   for (const ev of state.events.splice(0)) {
     if (ev === "level") showBanner(`LEVEL ${state.level}<small>TRAFFIC SPEEDS UP</small>`);
   }
   updateHud();
   audio.update({ running: state.running, speed: state.scrollSpeed, thrust: state.player.glow });
-  renderer.draw(state, { clock, dt, camera: prefs.camera, teslaColor: prefs.teslaColor });
+  renderer.draw(state, { clock, dt: paused ? 0 : dt, camera: prefs.camera, teslaColor: prefs.teslaColor });
   requestAnimationFrame(frame);
 }
 
