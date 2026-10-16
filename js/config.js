@@ -23,6 +23,14 @@ export const NITRO_TIME = 3.5; // seconds of boost
 export const NITRO_SPEED = 1.5; // speed multiplier while boosting (score ×2)
 export const NITRO_GRACE = 0.7; // seconds after a boost where hits still smash, not crash
 export const SMASH_BONUS = 100; // points per car knocked aside while boosting
+// Gift boxes on the road award in-game tokens (just for fun; not real credits).
+// Some float high and can only be grabbed while flying.
+export const GIFT_HIGH_Y = 92; // height of a floating gift
+export const TOKEN_KINDS = {
+  grok: { label: "GROK", colour: "#e9eef5" },
+  cursor: { label: "CURSOR", colour: "#9fd8ff" },
+};
+export const WALLET_KEY = "flyingTeslaTokens";
 
 // Difficulty modes, picked on the start screen. Levels within a run make each
 // mode faster (`speed` grows 10% per level) and denser (`room` shrinks).

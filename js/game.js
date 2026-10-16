@@ -8,11 +8,12 @@ import { audio } from "./audio.js";
 import {
   BASE_SPEED, BONUS, FLY_BOOST, FLY_DURATION, HOP_HEIGHT, LANES, LANE_SWITCH_SPEED,
   MODES, NITRO_GRACE, NITRO_SPEED, NITRO_TIME, PLAYER_DRAW_H, PLAYER_SCREEN_X,
-  FLIP_TIME, SAFE_LANDING, SMASH_BONUS, SPAWN_X, START_LANE, VIEW_PAD,
+  FLIP_TIME, GIFT_HIGH_Y, SAFE_LANDING, SMASH_BONUS, SPAWN_X, START_LANE, TOKEN_KINDS, VIEW_PAD,
   TRICK_BONUS, W, laneGround,
 } from "./config.js";
+import { perksOf } from "./drivers.js";
 import { advanceSkyline, resetSkyline } from "./skyline.js";
-import { loadBest, saveBest } from "./storage.js";
+import { loadBest, loadWallet, saveBest, saveWallet } from "./storage.js";
 import { pedSay, seedPeds, updatePeds } from "./street.js";
 import { clamp, easeInOut, pick, rand, wrapAngle } from "./utils.js";
 import { CAR_COLORS, NPC_TYPES, VEHICLES, paintShades } from "./vehicles.js";
@@ -32,14 +33,17 @@ const DRIVER_IDLE = ["Excuse me sir!", "Move out, I'm late for home!", "Come on,
 const DRIVER_SMASHED = ["My car!!", "Are you serious?!", "I'm late for home!", "Insurance won't cover THIS"];
 const CHATTER = ["Nice night!", "Taxi!", "Hey!", "So much traffic…", "Love this city", "Coffee?", "Running late!", "Hi!"];
 
-// `running` is false on the start screen and after a crash.
-export function createState(running, mode = "normal") {
+// `running` is false on the start screen and after a crash. `driver` is a
+// DRIVERS id; its perks tweak bonuses for the run.
+export function createState(running, mode = "normal", driver = "elon") {
   resetSkyline();
   const cfg = MODES[mode];
   return {
     running,
     mode,
     cfg,
+    driver,
+    perks: perksOf(driver),
     crashReason: "",
     distance: 0,
     score: 0,
@@ -56,8 +60,11 @@ export function createState(running, mode = "normal") {
     stars: seedStars(),
     shake: 0,
     honkTimer: rand(2, 4),
-    pickups: [], // nitro canisters on the road
+    pickups: [], // nitro canisters and gift boxes on the road
     nextNitroAt: 1500 + rand(0, 1500),
+    nextGiftAt: 600 + rand(0, 600),
+    tokens: { grok: 0, cursor: 0 }, // collected this run
+    wallet: loadWallet(), // all runs
     chatterTimer: rand(2, 5),
     player: {
       w: VEHICLES.tesla.w,
@@ -73,6 +80,7 @@ export function createState(running, mode = "normal") {
       rot: 0, // flip angle (rad); positive = clockwise = front flip
       targetRot: 0, // whole turns queued this flight; rot animates toward it
       nitro: 0, // seconds of boost left
+      nitroMax: NITRO_TIME, // length of the current boost (for gauges)
       grace: 0, // seconds after a boost where hits still smash
       graceHold: false, // grace is held until the Tesla is free to hop again
       spin: 0, // held flip input: -1 back, 0 none, 1 front (chains more flips)
@@ -426,9 +434,10 @@ function land(state) {
   const flips = Math.round(p.targetRot / TAU);
   if (flips !== 0) {
     const n = Math.abs(flips);
-    state.score += TRICK_BONUS * n;
+    const trick = Math.round(TRICK_BONUS * n * state.perks.flipBonus);
+    state.score += trick;
     const name = flips > 0 ? "FRONTFLIP" : "BACKFLIP";
-    addPopup(state, `${name}${n > 1 ? ` x${n}` : ""} +${TRICK_BONUS * n}`, "#ffd166");
+    addPopup(state, `${name}${n > 1 ? ` x${n}` : ""} +${trick}`, "#ffd166");
     audio.trick();
   }
   p.rot = p.targetRot = 0;
@@ -475,8 +484,9 @@ function checkCars(state) {
     if (!car.passed && car.x + car.w < PX) {
       car.passed = true;
       if (car.jumped) {
-        state.score += BONUS;
-        addPopup(state, `+${BONUS}`);
+        const bonus = Math.round(BONUS * state.perks.flyBonus);
+        state.score += bonus;
+        addPopup(state, `+${bonus}`);
         audio.bonus();
       }
     }
@@ -498,28 +508,71 @@ function smash(state, car) {
 // ---------------------------------------------------------------------------
 // Nitro pickups
 // ---------------------------------------------------------------------------
-function updatePickups(state, dt) {
-  const p = state.player;
-  // Drop a canister into a lane that's clear around the spawn point.
+// Lanes with no car near the spawn point.
+function freeLanes(state) {
+  return LANES.map((_, i) => i).filter(
+    (lane) => !state.cars.some((c) => c.lane === lane && Math.abs(c.x - SPAWN_X) < 260),
+  );
+}
+
+function spawnPickups(state) {
   if (state.distance >= state.nextNitroAt) {
-    const free = LANES.map((_, i) => i).filter(
-      (lane) => !state.cars.some((c) => c.lane === lane && Math.abs(c.x - SPAWN_X) < 260),
-    );
+    const free = freeLanes(state);
     if (free.length) {
-      state.pickups.push({ x: SPAWN_X, lane: pick(free) });
+      state.pickups.push({ kind: "nitro", x: SPAWN_X, lane: pick(free) });
       state.nextNitroAt = state.distance + rand(2600, 4600);
     }
   }
-  // Canisters sit on the road, so they scroll with it.
+  if (state.distance >= state.nextGiftAt) {
+    const free = freeLanes(state);
+    if (free.length) {
+      const golden = Math.random() < 0.08;
+      state.pickups.push({
+        kind: "gift",
+        x: SPAWN_X + 120, // offset so a gift never lands on a canister
+        lane: pick(free),
+        token: Math.random() < 0.5 ? "grok" : "cursor",
+        amount: golden ? 1000 : 50 * (1 + Math.floor(Math.random() * 5)),
+        golden,
+        high: Math.random() < 0.3, // floating: fly to grab it
+      });
+      state.nextGiftAt = state.distance + rand(1100, 2200) / state.perks.giftRate;
+    }
+  }
+}
+
+function collect(state, pk) {
+  const p = state.player;
+  if (pk.kind === "nitro") {
+    p.nitro = p.nitroMax = NITRO_TIME + state.perks.nitroExtra;
+    p.grace = 0;
+    p.graceHold = false;
+    addPopup(state, "NITRO!", "#5ee8ff");
+    audio.nitro();
+    return;
+  }
+  const kind = TOKEN_KINDS[pk.token];
+  const mult = pk.token === "grok" ? state.perks.grokTokens : state.perks.cursorTokens;
+  const amount = Math.round(pk.amount * mult);
+  state.tokens[pk.token] += amount;
+  state.wallet[pk.token] += amount;
+  saveWallet(state.wallet);
+  addPopup(state, `+${amount} ${kind.label} TOKENS`, pk.golden ? "#ffd166" : kind.colour);
+  state.events.push("tokens");
+  audio.gift(pk.golden);
+}
+
+function updatePickups(state, dt) {
+  const p = state.player;
+  spawnPickups(state);
+  // Pickups sit on the road, so they scroll with it.
   for (const pk of state.pickups) pk.x -= state.scrollSpeed * dt;
   state.pickups = state.pickups.filter((pk) => {
-    const hit = Math.abs(pk.lane - p.lanePos) < 0.55 && pk.x < PX + p.w && pk.x + 34 > PX && p.hop < 40;
+    // Floating gifts need the car high in the air; the rest need it on the road.
+    const reach = pk.high ? p.hop > GIFT_HIGH_Y - 50 : p.hop < 40;
+    const hit = reach && Math.abs(pk.lane - p.lanePos) < 0.55 && pk.x < PX + p.w && pk.x + 34 > PX;
     if (hit) {
-      p.nitro = NITRO_TIME;
-      p.grace = 0;
-      p.graceHold = false;
-      addPopup(state, "NITRO!", "#5ee8ff");
-      audio.nitro();
+      collect(state, pk);
       return false;
     }
     return pk.x > -VIEW_PAD;

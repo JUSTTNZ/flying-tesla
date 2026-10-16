@@ -9,8 +9,9 @@
  * Side-view screen x maps to z via z = x - (Tesla front) + zOff.
  */
 import { drawAd, billboardsBetween } from "./billboards.js";
+import { drawGiftBox } from "./gifts.js";
 import {
-  HOP_HEIGHT, LANES, PLAYER_SCREEN_X, SIDEWALK_TOP, VIEW_PAD, W, H,
+  GIFT_HIGH_Y, HOP_HEIGHT, LANES, PLAYER_SCREEN_X, SIDEWALK_TOP, VIEW_PAD, W, H,
 } from "./config.js";
 import { drawHorizon } from "./skyline.js";
 import { drawBubble, drawPed } from "./street.js";
@@ -86,7 +87,9 @@ export function drawForward(c, state, view, { clock, sky, teslaShades, carAngle 
   }
   for (const pk of state.pickups) {
     const z = zOf(pk.x);
-    if (z > Z_NEAR && z < FADE_END) items.push({ z, draw: () => drawCanister(c, pk, z, proj, clock) });
+    if (z <= Z_NEAR || z >= FADE_END) continue;
+    const draw = pk.kind === "gift" ? () => drawGift(c, pk, z, proj, clock) : () => drawCanister(c, pk, z, proj, clock);
+    items.push({ z, draw });
   }
   if (v.showTesla) {
     const z = v.zOff - p.w;
@@ -519,6 +522,23 @@ function drawCanister(c, pk, z, proj, clock) {
     c.textBaseline = "middle";
     c.fillText("N₂O", at.x, at.y - 14 * s);
   }
+  c.restore();
+}
+
+function drawGift(c, pk, z, proj, clock) {
+  const X = (pk.lane - 1) * LANE_W;
+  const bob = Math.sin(clock * 4 + pk.x * 0.013) * 3;
+  const at = proj(z, X, (pk.high ? GIFT_HIGH_Y : 4) + bob);
+  const ground = proj(z, X);
+  c.save();
+  c.globalAlpha = fade(z);
+  if (!pk.high) {
+    c.fillStyle = "rgba(0, 0, 0, 0.35)";
+    c.beginPath();
+    c.ellipse(ground.x, ground.y, 14 * at.s, 3 * at.s, 0, 0, Math.PI * 2);
+    c.fill();
+  }
+  drawGiftBox(c, at.x, at.y, (pk.golden ? 30 : 25) * at.s, pk, clock, ground.y);
   c.restore();
 }
 

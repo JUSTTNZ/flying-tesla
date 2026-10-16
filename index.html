@@ -29,6 +29,13 @@
       <button id="muteBtn" class="pill" type="button" aria-label="Mute sound">SOUND ON</button>
     </header>
 
+    <!-- Tokens collected this run from gift boxes (in-game only). -->
+    <div id="tokens" aria-label="Driver and tokens this run">
+      <span class="tok driver"><canvas id="driverBadge" width="40" height="40"></canvas><b id="driverName">Elon</b></span>
+      <span class="tok grok" id="grokTok"><i>G</i><b id="grokTokens">0</b> GROK TOKENS</span>
+      <span class="tok cursor" id="cursorTok"><i>➤</i><b id="cursorTokens">0</b> CURSOR TOKENS</span>
+    </div>
+
     <canvas id="game" width="1280" height="720"></canvas>
 
     <!-- "LEVEL 2" announcement; main.js restarts the animation each level. -->
@@ -77,11 +84,17 @@
         </button>
       </div>
 
+      <div class="drivers">
+        <span>Driver</span>
+        <div id="driverPicker" role="radiogroup" aria-label="Driver"></div>
+        <p id="driverPerk"></p>
+      </div>
+
       <ul class="controls keys">
         <li><kbd>Space</kbd> fly over traffic</li>
         <li><kbd>↑</kbd><kbd>↓</kbd> change lane</li>
         <li><kbd>←</kbd><kbd>→</kbd> flip in the air (hold for more)</li>
-        <li><kbd>C</kbd> camera / POV · <kbd>T</kbd> car colour</li>
+        <li><kbd>C</kbd> camera / POV · <kbd>T</kbd> car colour · <kbd>D</kbd> driver</li>
         <li><kbd>P</kbd> pause · <kbd>M</kbd> sound</li>
       </ul>
       <ul class="controls touch">
@@ -89,7 +102,11 @@
         <li><b>▲ ▼</b> or swipe: change lane</li>
         <li><b>↺ ↻</b> in the air: flip (hold for more)</li>
       </ul>
-      <p class="tip">Grab blue N₂O canisters for a nitro boost. Every flip you land scores +300.</p>
+      <p class="tip">Grab blue N₂O canisters for a nitro boost and gift boxes for tokens. Every flip you land scores +300.</p>
+      <p class="wallet">
+        Wallet: <b id="walletGrok">0</b> Grok · <b id="walletCursor">0</b> Cursor tokens
+        <small>in-game only, not real credits</small>
+      </p>
 
       <button id="restartBtn" type="button">Start</button>
       <p class="fine">Fan-made game · not affiliated with Tesla, SpaceX or xAI</p>
@@ -106,6 +123,22 @@
         <button id="pauseRestartBtn" class="secondary" type="button">Restart</button>
       </div>
     </div>
+  </div>
+
+  <!-- Splash screen, shown once per load before the menu (see js/splash.js). -->
+  <div id="splash">
+    <canvas id="splashCanvas"></canvas>
+    <div class="splash-content">
+      <p class="splash-kicker">A NIGHT-CITY RUNNER</p>
+      <h1 class="splash-title" aria-label="Flying Tesla">
+        <span>F</span><span>L</span><span>Y</span><span>I</span><span>N</span><span>G</span>
+        <span class="gap"></span>
+        <span>T</span><span>E</span><span>S</span><span>L</span><span>A</span>
+      </h1>
+      <div class="splash-track"><i id="splashBar"></i></div>
+      <p class="splash-prompt" id="splashPrompt">PRESS ANY KEY OR TAP TO START</p>
+    </div>
+    <p class="splash-fine">Fan-made game · not affiliated with Tesla, SpaceX or xAI · sound on 🔊</p>
   </div>
 
   <script type="module" src="js/main.js"></script>

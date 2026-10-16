@@ -59,6 +59,19 @@ Open http://localhost:5173
 - Drivers honk and lean out to shout ("Excuse me sir!", "Move out, I'm late
   for home!"), especially when you cut in or land in front of them.
 
+- **Gift boxes** (black = Grok, white = Cursor, rare gold = +1,000) award
+  in-game tokens, counted top-left and saved in a wallet across runs. Some
+  float high and can only be grabbed while flying. Tokens are just for fun,
+  not real Grok or Cursor credits.
+
+## Drivers
+
+Pick a driver on the menu (or press D): Elon Musk (2× Grok tokens), Jeff Bezos
+(nitro lasts 1s longer), Sundar Pichai (more gift boxes), Jensen Huang (1.5×
+flip bonus) or Steve Jobs (1.5× fly-over bonus). Portraits are drawn cartoons;
+to use photos locally, put `elon.jpg`, `bezos.jpg`, `pichai.jpg`, `jensen.jpg`
+or `jobs.jpg` (or .png) in `assets/drivers/` — that folder isn't published.
+
 The game pauses itself when you switch tabs.
 
 ## The city
@@ -91,6 +104,9 @@ and thrusters, city rumble, crowd murmur, and people chattering and cheering
 | `js/billboards.js` | Roadside billboards: drawn ads and picture ads from `assets/` |
 | `js/forward.js` | Behind / Hood / Driver forward views (perspective road) |
 | `js/pov.js` | Driver cabin, hood and drone HUD overlays |
+| `js/gifts.js` | Gift boxes that award tokens |
+| `js/drivers.js` | Selectable drivers, perks and portraits |
+| `js/splash.js` | Animated splash screen before the menu |
 | `js/audio.js` | Web Audio: ambience beds and one-shot effects |
 | `js/storage.js` | Best score per mode and preferences in localStorage |
 | `js/config.js` | Tuning values, difficulty modes, cameras, scene layout |

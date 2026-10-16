@@ -12,8 +12,10 @@
  */
 import { audio } from "./audio.js";
 import { CAMERAS, MODES, TESLA_COLORS } from "./config.js";
+import { DRIVERS, DRIVER_IDS, drawAvatar } from "./drivers.js";
 import { changeLane, createState, flip, tryFly, update } from "./game.js";
 import { createRenderer } from "./renderer.js";
+import { runSplash } from "./splash.js";
 import { loadPrefs, savePrefs } from "./storage.js";
 
 const $ = (id) => document.getElementById(id);
@@ -30,14 +32,15 @@ const modeBtns = [...document.querySelectorAll(".mode-btn")];
 const colorBtns = [...document.querySelectorAll(".color-btn")];
 
 // Remembered choices.
-const prefs = { mode: "normal", camera: "side", muted: false, teslaColor: "white", ...loadPrefs() };
+const prefs = { mode: "normal", camera: "side", muted: false, teslaColor: "white", driver: "elon", ...loadPrefs() };
 if (!MODES[prefs.mode]) prefs.mode = "normal";
 if (!CAMERAS.includes(prefs.camera)) prefs.camera = "side";
 if (!TESLA_COLORS[prefs.teslaColor]) prefs.teslaColor = "white";
+if (!DRIVERS[prefs.driver]) prefs.driver = "elon";
 audio.setMuted(prefs.muted);
 
 const renderer = createRenderer($("game"));
-let state = createState(false, prefs.mode);
+let state = createState(false, prefs.mode, prefs.driver);
 let paused = false;
 
 // Held flip keys/buttons (holding chains flips); applied to the player every frame.
@@ -51,6 +54,8 @@ function updateHud() {
   // BEST tracks the current run live once you beat the saved record.
   $("best").textContent = Math.floor(Math.max(state.best, state.score));
   $("level").textContent = state.level;
+  $("grokTokens").textContent = state.tokens.grok.toLocaleString();
+  $("cursorTokens").textContent = state.tokens.cursor.toLocaleString();
   const p = state.player;
   const cooling = p.cooldown > 0;
   flyBtn.disabled = p.flying || cooling || !state.running || paused;
@@ -66,6 +71,11 @@ function updateLabels() {
   muteBtn.textContent = prefs.muted ? "SOUND OFF" : "SOUND ON";
   for (const b of modeBtns) b.setAttribute("aria-checked", String(b.dataset.mode === prefs.mode));
   for (const b of colorBtns) b.setAttribute("aria-checked", String(b.dataset.color === prefs.teslaColor));
+  for (const b of driverBtns) b.setAttribute("aria-checked", String(b.dataset.driver === prefs.driver));
+  const d = DRIVERS[prefs.driver];
+  $("driverPerk").textContent = `${d.name} · ${d.perkText}`;
+  $("driverName").textContent = d.short;
+  paintAvatar($("driverBadge"), prefs.driver);
 }
 
 // One overlay serves as both the start screen and the game over screen.
@@ -78,8 +88,19 @@ function showOverlay(kind) {
   $("finalScore").textContent = Math.floor(state.score);
   $("finalBest").textContent = Math.floor(state.best);
   $("finalLevel").textContent = state.level;
+  $("walletGrok").textContent = state.wallet.grok.toLocaleString();
+  $("walletCursor").textContent = state.wallet.cursor.toLocaleString();
   overlay.classList.remove("hidden");
   restartBtn.focus();
+}
+
+// Pulse both token counters when a gift is collected.
+function bumpTokens() {
+  for (const el of [$("grokTok"), $("cursorTok")]) {
+    el.classList.remove("bump");
+    void el.offsetWidth;
+    el.classList.add("bump");
+  }
 }
 
 function showBanner(html) {
@@ -95,7 +116,7 @@ function showBanner(html) {
 function start() {
   setPaused(false);
   audio.ensure();
-  state = createState(true, prefs.mode);
+  state = createState(true, prefs.mode, prefs.driver);
   overlay.classList.add("hidden");
   showBanner(`LEVEL 1<small>${MODES[prefs.mode].label.toUpperCase()}</small>`);
   updateHud();
@@ -134,7 +155,7 @@ function setMode(mode) {
   savePrefs(prefs);
   // Show this mode's best score on the menu.
   const { score, level, crashReason } = state;
-  state = createState(false, mode);
+  state = createState(false, mode, prefs.driver);
   Object.assign(state, { score, level, crashReason });
   $("finalBest").textContent = Math.floor(state.best);
   updateLabels();
@@ -144,6 +165,40 @@ function setMode(mode) {
 function cycleCamera() {
   prefs.camera = CAMERAS[(CAMERAS.indexOf(prefs.camera) + 1) % CAMERAS.length];
   savePrefs(prefs);
+  updateLabels();
+}
+
+// Driver portraits drawn into small canvases (crisp on high-DPI screens).
+function paintAvatar(canvas, id) {
+  const size = canvas.clientWidth || 44;
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  canvas.width = Math.round(size * dpr);
+  canvas.height = Math.round(size * dpr);
+  const c = canvas.getContext("2d");
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  drawAvatar(c, id, size / 2, size / 2, size / 2);
+}
+
+const driverBtns = DRIVER_IDS.map((id) => {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "driver-btn";
+  b.setAttribute("role", "radio");
+  b.dataset.driver = id;
+  b.innerHTML = `<canvas></canvas><span>${DRIVERS[id].short}</span>`;
+  b.addEventListener("click", () => setDriver(id));
+  $("driverPicker").append(b);
+  return b;
+});
+
+// Perks apply to the next run, so the driver only changes on the menu.
+function setDriver(id) {
+  if (state.running || !DRIVERS[id]) return;
+  prefs.driver = id;
+  savePrefs(prefs);
+  const { score, level, crashReason } = state;
+  state = createState(false, prefs.mode, id);
+  Object.assign(state, { score, level, crashReason });
   updateLabels();
 }
 
@@ -203,6 +258,7 @@ addEventListener("keydown", (e) => {
   if (k === "KeyC") cycleCamera();
   if (k === "KeyT") toggleColor();
   if (k === "KeyM") toggleMute();
+  if (k === "KeyD" && !state.running) setDriver(DRIVER_IDS[(DRIVER_IDS.indexOf(prefs.driver) + 1) % DRIVER_IDS.length]);
   if (k === "KeyR" && !state.running) start();
   if (!state.running && ["Digit1", "Digit2", "Digit3"].includes(k)) {
     setMode(["easy", "normal", "hard"][Number(k.slice(-1)) - 1]);
@@ -297,6 +353,7 @@ function frame(now) {
   if (!paused && update(state, dt) === "crash") showOverlay("over");
   for (const ev of state.events.splice(0)) {
     if (ev === "level") showBanner(`LEVEL ${state.level}<small>TRAFFIC SPEEDS UP</small>`);
+    if (ev === "tokens") bumpTokens();
   }
   updateHud();
   audio.update({ running: state.running, speed: state.scrollSpeed, thrust: state.player.glow });
@@ -305,6 +362,22 @@ function frame(now) {
 }
 
 updateLabels();
-showOverlay("ready");
+// Portraits in the picker (repainted once photos, if any, finish loading).
+const paintPicker = () => driverBtns.forEach((b) => paintAvatar(b.querySelector("canvas"), b.dataset.driver));
+paintPicker();
+addEventListener("load", () => {
+  paintPicker();
+  paintAvatar($("driverBadge"), prefs.driver);
+});
 updateHud();
 requestAnimationFrame(frame);
+
+// Splash first; its "press any key" also unlocks audio. Then the menu.
+runSplash({
+  teslaShades: () => TESLA_COLORS[prefs.teslaColor],
+  onDone: () => {
+    audio.ensure();
+    audio.takeoff();
+    showOverlay("ready");
+  },
+});

@@ -5,7 +5,8 @@
  *   drone  — camera HUD with REC light, timecode and flight readouts
  * Drawn after the world, in the fixed 1280×720 screen coordinates.
  */
-import { BASE_SPEED, H, HOP_HEIGHT, LANES, NITRO_TIME, W } from "./config.js";
+import { BASE_SPEED, H, HOP_HEIGHT, LANES, W } from "./config.js";
+import { DRIVERS, drawAvatar } from "./drivers.js";
 import { roundRect } from "./utils.js";
 
 const FONT = "'Avenir Next', 'Segoe UI', Helvetica, Arial, sans-serif";
@@ -175,6 +176,14 @@ function drawCentreScreen(c, state, clock, x, y, w, h) {
   roundRect(c, x, y, w, h, 12);
   c.fill();
 
+  // Driver portrait in the corner of the screen.
+  drawAvatar(c, state.driver, x + w - 22, y + h - 22, 14);
+  c.fillStyle = "#8aa0c0";
+  c.font = `600 10px ${FONT}`;
+  c.textAlign = "right";
+  c.textBaseline = "middle";
+  c.fillText(DRIVERS[state.driver].short.toUpperCase(), x + w - 42, y + h - 22);
+
   // Speed.
   c.textAlign = "left";
   c.textBaseline = "alphabetic";
@@ -207,7 +216,7 @@ function drawCentreScreen(c, state, clock, x, y, w, h) {
   } else if (p.nitro > 0) {
     label = "NITRO";
     colour = "#5ee8ff";
-    fill = p.nitro / NITRO_TIME;
+    fill = p.nitro / p.nitroMax;
   } else if (p.flying) {
     label = "AIRBORNE";
     colour = "#ffd166";

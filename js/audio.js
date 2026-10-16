@@ -183,6 +183,13 @@ export const audio = {
     this.noise({ dur: 1.2, gain: 0.12, type: "bandpass", f0: 600, f1: 3000, q: 0.6, attack: 0.05 });
   },
 
+  // Gift collected: sparkly arpeggio (longer for a golden one).
+  gift(golden = false) {
+    const notes = golden ? [784, 988, 1175, 1568, 1976] : [1047, 1319, 1568];
+    notes.forEach((f, i) => this.voice({ type: "triangle", freq: f, dur: 0.18, gain: 0.045, delay: i * 0.06 }));
+    this.noise({ dur: 0.5, gain: 0.03, type: "highpass", f0: 5000, f1: 9000, attack: 0.02 });
+  },
+
   // Boosting through a car: crunch and a thud.
   smash(pan = 0) {
     this.noise({ dur: 0.35, gain: 0.22, type: "lowpass", f0: 3000, f1: 300, pan });

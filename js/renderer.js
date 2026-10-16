@@ -5,10 +5,11 @@
  */
 import { audio } from "./audio.js";
 import {
-  FLY_DURATION, H, HOP_HEIGHT, PLAYER_DRAW_H, PLAYER_SCREEN_X, SIDEWALK_TOP,
+  FLY_DURATION, GIFT_HIGH_Y, H, HOP_HEIGHT, PLAYER_DRAW_H, PLAYER_SCREEN_X, SIDEWALK_TOP,
   TESLA_COLORS, VIEW_PAD, W, laneGround,
 } from "./config.js";
 import { FORWARD_VIEWS, drawForward } from "./forward.js";
+import { drawGiftBox } from "./gifts.js";
 import { drawPovOverlay } from "./pov.js";
 import { drawSkyline, renderSkyline } from "./skyline.js";
 import { drawBubble, drawStreet } from "./street.js";
@@ -161,7 +162,11 @@ function drawTraffic(c, state, teslaShades, clock) {
 
   // Depth order: by lane, then left to right. Smashed cars fly over everything.
   const items = [
-    ...state.pickups.map((pk) => ({ lane: pk.lane - 0.1, x: pk.x, draw: () => drawNitro(c, pk, clock) })),
+    ...state.pickups.map((pk) => ({
+      lane: pk.high ? 97 : pk.lane - 0.1, // floating gifts sit above the traffic
+      x: pk.x,
+      draw: () => (pk.kind === "gift" ? drawGift(c, pk, clock) : drawNitro(c, pk, clock)),
+    })),
     ...state.cars.map((car) => ({
       lane: car.knocked ? 98 : car.lane,
       x: car.x,
@@ -202,6 +207,20 @@ function drawCar(c, car) {
   drawShadow(c, car.x, car.w, 0, ground);
   drawVehicle(c, car.x, y, car.w, car.h, car.spec, car.shades, car.wheelAngle);
   if (car.honkT > 0) drawHonk(c, car, y, !(car.bubbleT > 0));
+}
+
+// Gift box on its lane (or floating high above it).
+function drawGift(c, pk, clock) {
+  const ground = laneGround(pk.lane);
+  const bob = Math.sin(clock * 4 + pk.x * 0.013) * 3;
+  const by = ground - (pk.high ? GIFT_HIGH_Y : 6) + bob;
+  if (!pk.high) {
+    c.fillStyle = "rgba(0, 0, 0, 0.35)";
+    c.beginPath();
+    c.ellipse(pk.x + 17, ground + 2, 16, 4, 0, 0, Math.PI * 2);
+    c.fill();
+  }
+  drawGiftBox(c, pk.x + 17, by, pk.golden ? 38 : 32, pk, clock, ground);
 }
 
 // Nitro canister floating over its lane, pulsing.
