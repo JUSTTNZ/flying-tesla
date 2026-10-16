@@ -2,18 +2,11 @@
 
 Standalone side-view web game. **Not part of Shopa.**
 
-The road scrolls right to left through a night-time city. Your white Tesla auto-drives on the left. Tap **FLY** or press **Space** to hop over traffic for two seconds.
+## ▶ Play now: **[justtnz.github.io/flying-tesla](https://justtnz.github.io/flying-tesla/)**
 
-## Run
+Runs in any modern browser on desktop or mobile, with nothing to install.
 
-The game uses ES modules, so it must be served over HTTP (opening `index.html` directly from disk won't work):
-
-```bash
-cd /Users/user/Desktop/WORK/flying-tesla
-python3 -m http.server 5173
-```
-
-Open http://localhost:5173
+Your Tesla drives through a night-time city. Hop over traffic, switch lanes, flip in the air, grab nitro and gift boxes, and switch between side-on and racing-style camera views.
 
 ## Controls
 
