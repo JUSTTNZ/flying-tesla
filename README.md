@@ -21,7 +21,7 @@ Open http://localhost:5173
 | --- | --- | --- |
 | Fly over traffic (2s hop, then a short cooldown) | Space | FLY button or tap |
 | Change lane | ↑ / ↓ (or W / S) | ▲ ▼ buttons or swipe |
-| Flip while in the air | hold ← / → (or A / D) | hold ↺ ↻ |
+| Flip while in the air (tap = one flip, hold = keep flipping) | ← / → (or A / D) | ↺ ↻ |
 | Change camera (Side, Chase, Cinematic, Wide) | C | CAM button |
 | Mute | M | SOUND button |
 | Pick difficulty on the menu | 1 / 2 / 3 | Easy / Normal / Hard |
@@ -31,8 +31,8 @@ Open http://localhost:5173
 
 - Three lanes. Hitting a car in your lane while on the ground ends the run.
 - Score grows with distance; each car you fly over gives +150.
-- Flips: each full front flip or backflip gives +300, but only if you land
-  close to upright. Land at a bad angle and you crash.
+- Flips: each full front flip or backflip landed gives +300. A flip only starts
+  if there's time to finish it before touching down.
 - Levels: every stretch of road is a new level with faster, denser traffic and
   a new sky (dusk, midnight, neon, dawn).
 - Difficulty modes (Easy / Normal / Hard) change speed, cooldown and traffic

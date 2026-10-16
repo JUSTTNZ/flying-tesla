@@ -7,7 +7,7 @@
 import { audio } from "./audio.js";
 import {
   BASE_SPEED, BONUS, FLY_BOOST, FLY_DURATION, HOP_HEIGHT, LANES, LANE_SWITCH_SPEED,
-  MODES, PLAYER_DRAW_H, PLAYER_SCREEN_X, SAFE_LANDING, SPAWN_X, SPIN_SPEED, START_LANE,
+  MODES, PLAYER_DRAW_H, PLAYER_SCREEN_X, FLIP_TIME, SAFE_LANDING, SPAWN_X, START_LANE,
   TRICK_BONUS, W, laneGround,
 } from "./config.js";
 import { advanceSkyline, resetSkyline } from "./skyline.js";
@@ -60,9 +60,8 @@ export function createState(running, mode = "normal") {
       glow: 0,
       wheelAngle: 0,
       rot: 0, // flip angle (rad); positive = clockwise = front flip
-      spin: 0, // flip input: -1 back, 0 none, 1 front
-      spinTotal: 0, // rotation input this flight, to count flips
-      nextFlipSound: Math.PI,
+      targetRot: 0, // whole turns queued this flight; rot animates toward it
+      spin: 0, // held flip input: -1 back, 0 none, 1 front (chains more flips)
     },
   };
 }
@@ -90,10 +89,23 @@ export function tryFly(state) {
   p.flying = true;
   p.flyT = 0;
   p.glow = 1;
-  p.spinTotal = 0;
-  p.nextFlipSound = Math.PI;
+  p.rot = p.targetRot = 0;
   audio.takeoff();
   reactNearby(state, WOW, 0.5, 3);
+}
+
+// Start a full flip (dir 1 = front, -1 = back). Ignored on the ground, when
+// it would reverse a flip in progress, or when it couldn't finish before
+// landing — so flipping never makes you crash.
+export function flip(state, dir) {
+  const p = state.player;
+  if (!state.running || !p.flying) return;
+  const pending = p.targetRot - p.rot;
+  if (pending !== 0 && Math.sign(pending) !== dir) return;
+  const turns = (Math.abs(pending) + TAU) / TAU;
+  if (turns * FLIP_TIME > FLY_DURATION - p.flyT - 0.05) return;
+  p.targetRot += dir * TAU;
+  audio.flip();
 }
 
 export function changeLane(state, dir) {
@@ -326,19 +338,11 @@ function updateFlight(state, dt) {
   }
   p.flyT += dt;
 
-  if (p.spin) {
-    const d = p.spin * SPIN_SPEED * dt;
-    p.rot += d;
-    p.spinTotal += d;
-    if (Math.abs(p.spinTotal) >= p.nextFlipSound) {
-      audio.flip();
-      p.nextFlipSound += Math.PI;
-    }
-  } else {
-    // Without input the car eases itself level, but only when nearly upright.
-    const a = wrapAngle(p.rot);
-    if (Math.abs(a) < 0.5) p.rot -= a * Math.min(1, dt * 5);
-  }
+  // Holding a flip key chains another flip once the current one is half done.
+  if (p.spin && Math.abs(p.targetRot - p.rot) < Math.PI) flip(state, p.spin);
+  // Turn toward the queued rotation at one full turn per FLIP_TIME.
+  const left = p.targetRot - p.rot;
+  p.rot += Math.sign(left) * Math.min(Math.abs(left), (TAU / FLIP_TIME) * dt);
 
   if (p.flyT >= FLY_DURATION) return land(state) ? 0 : "bad landing";
   const lift = Math.sin((p.flyT / FLY_DURATION) * Math.PI);
@@ -358,7 +362,7 @@ function land(state) {
   p.cooldown = state.cfg.cooldown;
   if (Math.abs(wrapAngle(p.rot)) > SAFE_LANDING) return false;
 
-  const flips = Math.round(p.spinTotal / TAU);
+  const flips = Math.round(p.targetRot / TAU);
   if (flips !== 0) {
     const n = Math.abs(flips);
     state.score += TRICK_BONUS * n;
@@ -366,8 +370,7 @@ function land(state) {
     addPopup(state, `${name}${n > 1 ? ` x${n}` : ""} +${TRICK_BONUS * n}`, "#ffd166");
     audio.trick();
   }
-  p.rot = 0;
-  p.spinTotal = 0;
+  p.rot = p.targetRot = 0;
   audio.landing();
   // Landing right in front of someone gets you honked at.
   for (const car of state.cars) {

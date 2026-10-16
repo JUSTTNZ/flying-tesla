@@ -12,7 +12,7 @@
  */
 import { audio } from "./audio.js";
 import { CAMERAS, MODES } from "./config.js";
-import { changeLane, createState, tryFly, update } from "./game.js";
+import { changeLane, createState, flip, tryFly, update } from "./game.js";
 import { createRenderer } from "./renderer.js";
 import { loadPrefs, savePrefs } from "./storage.js";
 
@@ -35,7 +35,7 @@ audio.setMuted(prefs.muted);
 const renderer = createRenderer($("game"));
 let state = createState(false, prefs.mode);
 
-// Flip input from keys and touch buttons; applied to the player every frame.
+// Held flip keys/buttons (holding chains flips); applied to the player every frame.
 const spinHeld = { back: false, front: false };
 
 // ---------------------------------------------------------------------------
@@ -143,8 +143,15 @@ addEventListener("keydown", (e) => {
   }
   if (k === "ArrowUp" || k === "KeyW") lane(-1);
   if (k === "ArrowDown" || k === "KeyS") lane(1);
-  if (k === "ArrowLeft" || k === "KeyA") spinHeld.back = true;
-  if (k === "ArrowRight" || k === "KeyD") spinHeld.front = true;
+  // A tap starts a full flip; holding keeps flipping.
+  if (k === "ArrowLeft" || k === "KeyA") {
+    spinHeld.back = true;
+    flip(state, -1);
+  }
+  if (k === "ArrowRight" || k === "KeyD") {
+    spinHeld.front = true;
+    flip(state, 1);
+  }
   if (k === "KeyC") cycleCamera();
   if (k === "KeyM") toggleMute();
   if (k === "KeyR" && !state.running) start();
@@ -179,13 +186,14 @@ function tap(el, fn) {
   });
 }
 
-// Hold-to-flip buttons.
+// Flip buttons: a tap flips once, holding keeps flipping.
 function hold(el, key) {
   const set = (on) => (e) => {
     e.preventDefault();
     e.stopPropagation();
     spinHeld[key] = on;
     el.classList.toggle("held", on);
+    if (on) flip(state, key === "front" ? 1 : -1);
   };
   el.addEventListener("pointerdown", set(true));
   for (const ev of ["pointerup", "pointerleave", "pointercancel"]) el.addEventListener(ev, set(false));
