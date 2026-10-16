@@ -65,6 +65,7 @@ for (const id of DRIVER_IDS) {
     if (!img.src.endsWith(".png")) img.src = `assets/drivers/${id}.png`;
   };
   img.src = `assets/drivers/${id}.jpg`;
+  img.decode?.().catch(() => {}); // pre-decode off the main thread
   photos[id] = img;
 }
 export const photoReady = (id) => photos[id] && photos[id].complete && photos[id].naturalWidth > 0;

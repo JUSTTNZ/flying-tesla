@@ -12,7 +12,7 @@ import { VEHICLES, drawVehicle } from "./vehicles.js";
 const MIN_SHOW = 1.8; // seconds before it can be dismissed (loading bar fills)
 const LOOP = 3.4; // seconds per fly-past
 
-export function runSplash({ teslaShades, onDone }) {
+export function runSplash({ teslaShades, onGesture, onDone }) {
   const root = document.getElementById("splash");
   const canvas = document.getElementById("splashCanvas");
   const bar = document.getElementById("splashBar");
@@ -112,6 +112,9 @@ export function runSplash({ teslaShades, onDone }) {
     e.preventDefault();
     e.stopImmediatePropagation(); // don't let this key/tap also start the run
     root.classList.add("leaving");
+    // Inside the key/tap handler, so the browser lets audio start, and its
+    // one-off setup cost lands during the fade instead of mid-run.
+    onGesture();
     setTimeout(() => {
       cancelAnimationFrame(raf);
       root.remove();

@@ -169,6 +169,9 @@ const IMAGE_H = 136;
 function loadImage(src) {
   const img = new Image();
   img.src = encodeURI(src);
+  // Decode in the background now, so the first time a picture scrolls into
+  // view doesn't stall a frame while it's decoded.
+  img.decode?.().catch(() => {});
   return img;
 }
 

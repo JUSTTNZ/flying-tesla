@@ -73,10 +73,31 @@ export function roundRect(c, x, y, w, h, r) {
 }
 
 // Soft round light. `color` is an rgba() string with the literal "ALPHA" in it.
+// Each colour's radial gradient is baked once into a small sprite and then
+// stamped, which is far cheaper than building a gradient for every light on
+// every frame.
+const glowSprites = new Map();
+
+function glowSprite(color) {
+  let sprite = glowSprites.get(color);
+  if (!sprite) {
+    sprite = document.createElement("canvas");
+    sprite.width = sprite.height = 128;
+    const g = sprite.getContext("2d");
+    const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+    grad.addColorStop(0, color.replace("ALPHA", 1));
+    grad.addColorStop(1, color.replace("ALPHA", 0));
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 128, 128);
+    glowSprites.set(color, sprite);
+  }
+  return sprite;
+}
+
 export function glow(c, x, y, r, color, alpha) {
-  const g = c.createRadialGradient(x, y, 0, x, y, r);
-  g.addColorStop(0, color.replace("ALPHA", alpha));
-  g.addColorStop(1, color.replace("ALPHA", 0));
-  c.fillStyle = g;
-  c.fillRect(x - r, y - r, r * 2, r * 2);
+  if (!(r > 0) || !(alpha > 0) || !Number.isFinite(x + y)) return;
+  const prev = c.globalAlpha;
+  c.globalAlpha = prev * Math.min(1, alpha);
+  c.drawImage(glowSprite(color), x - r, y - r, r * 2, r * 2);
+  c.globalAlpha = prev;
 }

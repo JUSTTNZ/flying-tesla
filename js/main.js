@@ -38,6 +38,9 @@ if (!CAMERAS.includes(prefs.camera)) prefs.camera = "side";
 if (!TESLA_COLORS[prefs.teslaColor]) prefs.teslaColor = "white";
 if (!DRIVERS[prefs.driver]) prefs.driver = "elon";
 audio.setMuted(prefs.muted);
+// Create the sound engine while the splash plays (after its title animation),
+// not on the first tap.
+setTimeout(() => audio.prepare(), 1100);
 
 const renderer = createRenderer($("game"));
 let state = createState(false, prefs.mode, prefs.driver);
@@ -49,20 +52,30 @@ const spinHeld = { back: false, front: false };
 // ---------------------------------------------------------------------------
 // HUD and overlay
 // ---------------------------------------------------------------------------
+// Write to the DOM only when a value changes: rewriting text and styles on
+// every frame forces needless layout work.
+const shown = new Map();
+function show(el, key, value, apply) {
+  if (shown.get(key) === value) return;
+  shown.set(key, value);
+  apply(el, value);
+}
+const setText = (el, v) => (el.textContent = v);
+
 function updateHud() {
-  $("score").textContent = Math.floor(state.score);
+  show($("score"), "score", Math.floor(state.score), setText);
   // BEST tracks the current run live once you beat the saved record.
-  $("best").textContent = Math.floor(Math.max(state.best, state.score));
-  $("level").textContent = state.level;
-  $("grokTokens").textContent = state.tokens.grok.toLocaleString();
-  $("cursorTokens").textContent = state.tokens.cursor.toLocaleString();
+  show($("best"), "best", Math.floor(Math.max(state.best, state.score)), setText);
+  show($("level"), "level", state.level, setText);
+  show($("grokTokens"), "grok", state.tokens.grok.toLocaleString(), setText);
+  show($("cursorTokens"), "cursor", state.tokens.cursor.toLocaleString(), setText);
   const p = state.player;
   const cooling = p.cooldown > 0;
-  flyBtn.disabled = p.flying || cooling || !state.running || paused;
-  pauseBtn.disabled = !state.running;
+  show(flyBtn, "flyOff", p.flying || cooling || !state.running || paused, (el, v) => (el.disabled = v));
+  show(pauseBtn, "pauseOff", !state.running, (el, v) => (el.disabled = v));
   // Dark overlay on the button: full while flying, draining during cooldown.
   const ratio = cooling ? p.cooldown / state.cfg.cooldown : p.flying ? 1 : 0;
-  cooldownBar.style.height = `${ratio * 100}%`;
+  show(cooldownBar, "cool", Math.round(ratio * 100), (el, v) => (el.style.height = `${v}%`));
 }
 
 function updateLabels() {
@@ -346,21 +359,49 @@ addEventListener("resize", renderer.resize);
 let last = performance.now();
 let clock = 0;
 
+let loopErrors = 0;
+// Frame-time watchdog: if play runs below ~45 fps for a couple of seconds,
+// lower the render resolution a notch (up to three times).
+let slowTime = 0;
+let sampleTime = 0;
+let sampleFrames = 0;
+function watchFrameRate(rawDt) {
+  if (!state.running || paused) return;
+  sampleTime += rawDt;
+  sampleFrames++;
+  if (sampleTime < 2) return;
+  const avg = sampleTime / sampleFrames;
+  slowTime = avg > 1 / 45 ? slowTime + sampleTime : 0;
+  sampleTime = sampleFrames = 0;
+  if (slowTime >= 2 && renderer.lowerQuality()) slowTime = 0;
+}
+
 function frame(now) {
-  const dt = Math.min(0.033, (now - last) / 1000); // clamp after tab switches
+  // Schedule the next frame first, so an error in this one can never stop the
+  // game loop (that used to freeze the game until a page refresh).
+  requestAnimationFrame(frame);
+  // Clamp: never negative (the first frame can start before `last`), and
+  // capped after tab switches or a slow frame.
+  const raw = (now - last) / 1000;
+  const dt = Math.max(0, Math.min(0.033, raw));
   last = now;
+  if (raw > 0 && raw < 0.5) watchFrameRate(raw);
   clock += dt;
 
-  state.player.spin = (spinHeld.front ? 1 : 0) - (spinHeld.back ? 1 : 0);
-  if (!paused && update(state, dt) === "crash") showOverlay("over");
-  for (const ev of state.events.splice(0)) {
-    if (ev === "level") showBanner(`LEVEL ${state.level}<small>TRAFFIC SPEEDS UP</small>`);
-    if (ev === "tokens") bumpTokens();
+  try {
+    state.player.spin = (spinHeld.front ? 1 : 0) - (spinHeld.back ? 1 : 0);
+    if (!paused && update(state, dt) === "crash") showOverlay("over");
+    for (const ev of state.events.splice(0)) {
+      if (ev === "level") showBanner(`LEVEL ${state.level}<small>TRAFFIC SPEEDS UP</small>`);
+      if (ev === "tokens") bumpTokens();
+    }
+    updateHud();
+    audio.update({ running: state.running, speed: state.scrollSpeed, thrust: state.player.glow });
+    renderer.draw(state, { clock, dt: paused ? 0 : dt, camera: prefs.camera, teslaColor: prefs.teslaColor });
+  } catch (err) {
+    // Skip this frame and keep playing; log the first few for debugging.
+    if (loopErrors++ < 3) console.error("Frame error:", err);
   }
-  updateHud();
-  audio.update({ running: state.running, speed: state.scrollSpeed, thrust: state.player.glow });
-  renderer.draw(state, { clock, dt: paused ? 0 : dt, camera: prefs.camera, teslaColor: prefs.teslaColor });
-  requestAnimationFrame(frame);
 }
 
 updateLabels();
@@ -377,9 +418,9 @@ requestAnimationFrame(frame);
 // Splash first; its "press any key" also unlocks audio. Then the menu.
 runSplash({
   teslaShades: () => TESLA_COLORS[prefs.teslaColor],
-  onDone: () => {
+  onGesture: () => {
     audio.ensure();
     audio.takeoff();
-    showOverlay("ready");
   },
+  onDone: () => showOverlay("ready"),
 });

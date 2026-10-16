@@ -13,7 +13,7 @@ import { drawGiftBox } from "./gifts.js";
 import { drawPovOverlay } from "./pov.js";
 import { drawSkyline, renderSkyline } from "./skyline.js";
 import { drawBubble, drawStreet } from "./street.js";
-import { clamp, glow, hexToRgb, lerpRgb, polyPath, rand, rgbStr, wrapAngle } from "./utils.js";
+import { clamp, glow, hexToRgb, lerpRgb, polyPath, rand, rgbStr, roundRect, wrapAngle } from "./utils.js";
 import { VEHICLES, drawBeam, drawShadow, drawVehicle } from "./vehicles.js";
 
 // Sky per level (cycling): four gradient stops top → horizon, plus haze tint.
@@ -32,7 +32,9 @@ export function createRenderer(canvas) {
   // Camera: world point at screen centre, zoom and roll; eased toward a target.
   const cam = { x: W / 2, y: H / 2, zoom: 1, rot: 0 };
   // Distant rocket: rises from behind the skyline every so often.
-  const rocket = { active: false, x: 0, t: 0, next: 6, trail: [] };
+  const rocket = { active: false, x: 0, t: 0, next: 6, trail: [], puff: 0 };
+  // Render quality: 1 = full sharpness; lowered automatically on slow devices.
+  let quality = 1;
 
   function updateRocket(dt) {
     if (!rocket.active) {
@@ -44,8 +46,13 @@ export function createRenderer(canvas) {
       return;
     }
     rocket.t += dt;
-    const pos = rocketPos(rocket);
-    rocket.trail.push({ x: pos.x, y: pos.y, age: 0 });
+    // A smoke puff every 1/20 s (not every frame) keeps the trail cheap.
+    rocket.puff += dt;
+    if (rocket.puff >= 0.05) {
+      rocket.puff = 0;
+      const pos = rocketPos(rocket);
+      rocket.trail.push({ x: pos.x, y: pos.y, age: 0 });
+    }
     for (const puff of rocket.trail) puff.age += dt;
     rocket.trail = rocket.trail.filter((puff) => puff.age < 3);
     if (rocket.t > 12) {
@@ -56,7 +63,8 @@ export function createRenderer(canvas) {
 
   function resize() {
     const cssW = canvas.getBoundingClientRect().width || W;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+    // Cap at 2× pixel density: beyond that costs a lot and looks the same.
+    const dpr = Math.min(window.devicePixelRatio || 1, 2) * quality;
     const next = Math.max(0.5, (cssW * dpr) / W);
     if (Math.abs(next - scale) < 0.01) return;
     scale = next;
@@ -144,8 +152,16 @@ export function createRenderer(canvas) {
     drawPovOverlay(ctx, camera, state, clock);
   }
 
+  // Called by main.js when frames are running slow.
+  function lowerQuality() {
+    if (quality <= 0.55) return false;
+    quality = Math.max(0.55, quality - 0.15);
+    resize();
+    return true;
+  }
+
   resize();
-  return { resize, draw };
+  return { resize, draw, lowerQuality };
 }
 
 // Cars, nitro canisters and the Tesla, far lane → near lane (the Tesla on top

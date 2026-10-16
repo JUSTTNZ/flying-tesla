@@ -19,8 +19,20 @@ export const audio = {
   beds: null,
   muted: false,
 
-  // Browsers only allow audio after a user gesture, so call this from input handlers.
-  ensure() {
+  // Create the audio engine early (it starts suspended until a user gesture).
+  // Creating it can take a noticeable moment, so doing it at page load keeps
+  // that pause away from the first tap.
+  prepare() {
+    try {
+      this.ensure(false);
+    } catch {
+      /* no Web Audio: play silently */
+    }
+  },
+
+  // Browsers only allow audio after a user gesture, so call this from input
+  // handlers; `resume` false just creates the engine.
+  ensure(resume = true) {
     if (!this.ctx) {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return;
@@ -33,7 +45,7 @@ export const audio = {
       this.noiseBuf = makeNoise(this.ctx);
       this.beds = startBeds(this);
     }
-    if (this.ctx.state === "suspended") this.ctx.resume();
+    if (resume && this.ctx.state === "suspended") this.ctx.resume();
   },
 
   // Freeze / resume all sound (pause screen).
@@ -49,9 +61,11 @@ export const audio = {
     if (this.master) this.master.gain.setTargetAtTime(muted ? 0 : MASTER, this.ctx.currentTime, 0.05);
   },
 
-  // Skip building nodes for sounds nobody will hear.
+  // Skip building nodes for sounds nobody will hear. While the context isn't
+  // running (blocked or paused) scheduled sounds would never finish, so they'd
+  // pile up in memory.
   get live() {
-    return this.ctx && !this.muted;
+    return this.ctx && !this.muted && this.ctx.state === "running";
   },
 
   // Output node for a sound at stereo position `pan`.
