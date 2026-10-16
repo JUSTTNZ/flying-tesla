@@ -1,8 +1,11 @@
 /**
  * Street level: pavements, road markings, trees, street lamps and the
- * pedestrians walking along the far pavement.
+ * pedestrians walking along the far pavement (with speech bubbles).
+ *
+ * Everything is drawn VIEW_PAD px past the screen edges so zoomed-out and
+ * tilted cameras never show a gap.
  */
-import { GROUND_Y, H, ROAD_BOTTOM, ROAD_TOP, SIDEWALK_TOP, W } from "./config.js";
+import { H, LANES, ROAD_BOTTOM, ROAD_TOP, SIDEWALK_TOP, VIEW_PAD, W } from "./config.js";
 import { glow, hash, mod, pick, rand, roundRect, shade } from "./utils.js";
 
 // ---------------------------------------------------------------------------
@@ -30,12 +33,20 @@ export function makePed(x) {
     pants: pick(PANTS),
     longHair: Math.random() < 0.4,
     bag: Math.random() < 0.3 ? pick(BAGS) : null,
+    bubble: "", // what they're saying
+    bubbleT: 0, // seconds left showing it (a negative value is a start delay)
   };
+}
+
+// Show a speech bubble, optionally after `delay` seconds.
+export function pedSay(ped, text, delay = 0) {
+  ped.bubble = text;
+  ped.bubbleT = 1.8 + delay;
 }
 
 export function seedPeds() {
   const peds = [];
-  for (let x = rand(20, 80); x < W + 40; x += rand(60, 200)) peds.push(makePed(x));
+  for (let x = rand(-VIEW_PAD, -200); x < W + VIEW_PAD; x += rand(60, 200)) peds.push(makePed(x));
   return peds;
 }
 
@@ -45,15 +56,16 @@ export function updatePeds(state, dt, scrollSpeed) {
   for (const ped of state.peds) {
     ped.x -= (scrollSpeed - ped.dir * ped.speed) * dt;
     ped.phase += dt * ped.speed * 0.16;
+    ped.bubbleT = Math.max(0, ped.bubbleT - dt);
   }
-  state.peds = state.peds.filter((ped) => ped.x > -40 && ped.x < W + 120);
+  state.peds = state.peds.filter((ped) => ped.x > -VIEW_PAD && ped.x < W + VIEW_PAD + 60);
 
   if (scrollSpeed > 0 && state.distance >= state.nextPedAt) {
-    state.peds.push(makePed(W + rand(20, 60)));
+    state.peds.push(makePed(W + VIEW_PAD + rand(0, 40)));
     state.nextPedAt = state.distance + rand(70, 230);
-  } else if (scrollSpeed === 0 && state.peds.length < 9 && Math.random() < dt * 0.5) {
+  } else if (scrollSpeed === 0 && state.peds.length < 14 && Math.random() < dt * 0.6) {
     const ped = makePed(0);
-    ped.x = ped.dir > 0 ? -30 : W + 30;
+    ped.x = ped.dir > 0 ? -VIEW_PAD + 10 : W + VIEW_PAD - 10;
     state.peds.push(ped);
   }
   state.peds.sort((a, b) => a.y - b.y); // back row drawn first
@@ -118,6 +130,34 @@ export function drawPed(c, ped) {
   c.fill();
   // Long hair falls down the back of the head.
   if (ped.longHair) c.fillRect(ped.dir > 0 ? x - 5.2 * s : x + 2.2 * s, hy - 1 * s, 3 * s, 9 * s);
+
+  // Speech bubble (after any start delay), fading out at the end.
+  const shown = ped.bubbleT > 0 && ped.bubbleT <= 1.8;
+  if (shown && ped.bubble) drawBubble(c, x, hy - 10 * s, ped.bubble, Math.min(1, ped.bubbleT * 3));
+}
+
+function drawBubble(c, x, y, text, alpha) {
+  c.save();
+  c.globalAlpha = alpha;
+  c.font = "700 12px 'Avenir Next', 'Segoe UI', Helvetica, Arial, sans-serif";
+  const w = c.measureText(text).width + 14;
+  const h = 20;
+  const bx = x - w / 2;
+  const by = y - h - 6;
+  c.fillStyle = "rgba(255, 255, 255, 0.95)";
+  roundRect(c, bx, by, w, h, 8);
+  c.fill();
+  c.beginPath(); // tail
+  c.moveTo(x - 4, by + h - 1);
+  c.lineTo(x + 4, by + h - 1);
+  c.lineTo(x, by + h + 6);
+  c.closePath();
+  c.fill();
+  c.fillStyle = "#1b2333";
+  c.textAlign = "center";
+  c.textBaseline = "middle";
+  c.fillText(text, x, by + h / 2 + 1);
+  c.restore();
 }
 
 // ---------------------------------------------------------------------------
@@ -130,35 +170,40 @@ export function drawPavement(c, distance, top, bottom) {
   g.addColorStop(0, "#3a4252");
   g.addColorStop(1, "#2a303c");
   c.fillStyle = g;
-  c.fillRect(-20, top, W + 40, bottom - top);
+  c.fillRect(-VIEW_PAD, top, W + VIEW_PAD * 2, bottom - top);
   c.fillStyle = "rgba(0, 0, 0, 0.22)";
   const off = mod(distance, 48);
-  for (let x = -off; x < W; x += 48) c.fillRect(x, top, 2, bottom - top);
+  for (let x = -VIEW_PAD - off; x < W + VIEW_PAD; x += 48) c.fillRect(x, top, 2, bottom - top);
   c.fillStyle = "rgba(255, 255, 255, 0.06)";
-  c.fillRect(-20, top, W + 40, 2);
+  c.fillRect(-VIEW_PAD, top, W + VIEW_PAD * 2, 2);
 }
 
 export function drawRoad(c, distance) {
+  const L = -VIEW_PAD;
+  const RW = W + VIEW_PAD * 2;
   const g = c.createLinearGradient(0, ROAD_TOP, 0, ROAD_BOTTOM);
   g.addColorStop(0, "#232a35");
   g.addColorStop(1, "#151a22");
   c.fillStyle = g;
-  c.fillRect(-20, ROAD_TOP, W + 40, ROAD_BOTTOM - ROAD_TOP);
+  c.fillRect(L, ROAD_TOP, RW, ROAD_BOTTOM - ROAD_TOP);
 
   // Kerbs.
   c.fillStyle = "#6b7484";
-  c.fillRect(-20, ROAD_TOP - 3, W + 40, 5);
-  c.fillRect(-20, ROAD_BOTTOM - 2, W + 40, 6);
+  c.fillRect(L, ROAD_TOP - 3, RW, 5);
+  c.fillRect(L, ROAD_BOTTOM - 2, RW, 6);
 
-  // Edge lines, a yellow centre line behind traffic, and near lane dashes.
-  c.fillStyle = "rgba(230, 236, 245, 0.75)";
-  c.fillRect(-20, ROAD_TOP + 8, W + 40, 3);
-  c.fillRect(-20, ROAD_BOTTOM - 12, W + 40, 3);
-  const off = mod(distance, 80);
+  // Double yellow at the far edge, white near edge, dashed lines between lanes.
   c.fillStyle = "#f2d16b";
-  for (let x = -off; x < W; x += 80) c.fillRect(x, ROAD_TOP + 52, 42, 5);
-  c.fillStyle = "rgba(240, 244, 250, 0.5)";
-  for (let x = -off; x < W; x += 80) c.fillRect(x + 20, GROUND_Y + 40, 42, 4);
+  c.fillRect(L, ROAD_TOP + 8, RW, 3);
+  c.fillRect(L, ROAD_TOP + 14, RW, 3);
+  c.fillStyle = "rgba(230, 236, 245, 0.75)";
+  c.fillRect(L, ROAD_BOTTOM - 12, RW, 3);
+  const off = mod(distance, 80);
+  c.fillStyle = "rgba(240, 244, 250, 0.55)";
+  for (let i = 0; i < LANES.length - 1; i++) {
+    const y = LANES[i] + 22;
+    for (let x = L - off; x < W + VIEW_PAD; x += 80) c.fillRect(x, y, 42, 4);
+  }
 }
 
 // Props are anchored to world positions, so they scroll with the road.
@@ -166,8 +211,8 @@ function forEachProp(distance, spacing, phase, fn) {
   const first = Math.floor((distance - phase) / spacing) - 1;
   for (let k = first; ; k++) {
     const x = k * spacing + phase - distance;
-    if (x > W + 100) break;
-    if (x > -100) fn(x, k);
+    if (x > W + VIEW_PAD) break;
+    if (x > -VIEW_PAD) fn(x, k);
   }
 }
 
@@ -228,5 +273,5 @@ export function drawStreet(c, state) {
   for (const ped of state.peds) drawPed(c, ped);
   drawLamps(c, state.distance);
   drawRoad(c, state.distance);
-  drawPavement(c, state.distance, ROAD_BOTTOM, H + 10);
+  drawPavement(c, state.distance, ROAD_BOTTOM, H + VIEW_PAD);
 }

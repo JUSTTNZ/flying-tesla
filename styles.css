@@ -29,6 +29,9 @@ body {
   overflow: hidden;
   border-radius: 12px;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
+  touch-action: none; /* swipes change lanes instead of scrolling */
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 #game {
@@ -45,8 +48,10 @@ body {
   display: flex;
   align-items: center;
   gap: 20px;
-  padding: 16px 20px;
+  padding: 16px 20px 28px;
   pointer-events: none;
+  /* Keeps the HUD readable over bright buildings on zoomed cameras. */
+  background: linear-gradient(rgba(4, 7, 14, 0.55), rgba(4, 7, 14, 0));
 }
 
 .brand {
@@ -75,7 +80,7 @@ body {
   text-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
 }
 
-#muteBtn {
+.pill {
   pointer-events: auto;
   border: 1px solid rgba(255, 255, 255, 0.18);
   background: var(--panel);
@@ -87,7 +92,17 @@ body {
   cursor: pointer;
 }
 
-#muteBtn:hover { border-color: var(--accent); }
+.pill:hover { border-color: var(--accent); }
+
+#modeTag {
+  margin-left: 8px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(62, 198, 255, 0.16);
+  color: var(--accent);
+  font-size: 9px;
+  letter-spacing: 0.2em;
+}
 
 #flyBtn {
   position: absolute;
@@ -186,4 +201,135 @@ body {
 @media (max-width: 720px) {
   #flyBtn { width: 104px; height: 104px; right: 16px; bottom: 16px; }
   #flyBtn .fly-label { font-size: 22px; }
+}
+
+/* Level-up announcement */
+#banner {
+  position: absolute;
+  left: 50%;
+  top: 22%;
+  z-index: 2;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  font-size: clamp(22px, 5vw, 56px);
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  color: #fff;
+  text-shadow: 0 0 24px rgba(62, 198, 255, 0.8), 0 4px 20px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  white-space: nowrap;
+}
+
+#banner small {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.3em;
+  letter-spacing: 0.3em;
+  color: var(--accent);
+  text-align: center;
+}
+
+#banner.show { animation: banner 2.2s ease-out; }
+
+@keyframes banner {
+  0% { opacity: 0; transform: translate(-50%, -30%) scale(0.9); }
+  15% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  75% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -60%); }
+}
+
+/* Touch controls — only on devices without hover (phones, tablets). */
+.touch-pad {
+  position: absolute;
+  bottom: 28px;
+  z-index: 3;
+  display: none;
+  gap: 10px;
+}
+
+.touch-pad.left { left: 20px; flex-direction: column; }
+.touch-pad.right { right: 172px; align-items: flex-end; }
+
+.touch-btn {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 22px;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.touch-btn:active, .touch-btn.held { background: rgba(62, 198, 255, 0.35); }
+
+@media (hover: none) {
+  .touch-pad { display: flex; }
+}
+
+/* Overlay extras: difficulty picker, controls help */
+.card { max-height: 92vh; overflow-y: auto; }
+
+.modes {
+  display: inline-flex;
+  margin: 4px 0 18px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.mode-btn {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.mode-btn[aria-checked="true"] { background: var(--accent); color: #04121c; }
+
+.controls {
+  list-style: none;
+  margin: 0 0 10px;
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.controls kbd {
+  display: inline-block;
+  min-width: 22px;
+  margin-right: 3px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.controls b { color: var(--ink); }
+.controls.touch { display: none; }
+
+@media (hover: none) {
+  .controls.keys { display: none; }
+  .controls.touch { display: grid; }
+}
+
+.tip { font-size: 12px; color: var(--accent); margin-bottom: 18px; }
+
+@media (max-width: 720px) {
+  #hud { gap: 10px; padding: 10px 12px; }
+  .brand { display: none; }
+  .scores { gap: 12px; }
+  .stat b { font-size: 18px; }
+  .pill { padding: 6px 10px; font-size: 9px; }
+  .touch-pad { bottom: 16px; }
+  .touch-pad.right { right: 132px; }
+  .touch-btn { width: 46px; height: 46px; font-size: 18px; }
 }

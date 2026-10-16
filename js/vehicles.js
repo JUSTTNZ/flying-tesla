@@ -5,7 +5,7 @@
  * Wheels sit at `wheels` (x fractions) with radius `r` (fraction of height).
  * `head` / `tail` are light positions. All vehicles face right.
  */
-import { GROUND_Y, PLAYER_DRAW_H } from "./config.js";
+import { PLAYER_DRAW_H } from "./config.js";
 import { glow, polyPath, roundRect, shade } from "./utils.js";
 
 export const VEHICLES = {
@@ -64,12 +64,12 @@ export const CAR_COLORS = ["#e63946", "#3a86ff", "#ffbe0b", "#2ec4b6", "#8338ec"
 // [highlight, base, dark] paint shades for a body colour.
 export const paintShades = (color) => [shade(color, 0.35), color, shade(color, -0.35)];
 
-// Shadow on the tarmac; `altitude` 0..1 shrinks and fades it as the car rises.
-export function drawShadow(c, x, w, altitude) {
+// Shadow on the tarmac at `ground`; `altitude` 0..1 shrinks and fades it as the car rises.
+export function drawShadow(c, x, w, altitude, ground) {
   const k = 1 - altitude * 0.45;
   c.fillStyle = `rgba(4, 6, 10, ${0.45 * k})`;
   c.beginPath();
-  c.ellipse(x + w * 0.5, GROUND_Y + 2, w * 0.54 * k, 6 * k, 0, 0, Math.PI * 2);
+  c.ellipse(x + w * 0.5, ground + 2, w * 0.54 * k, 6 * k, 0, 0, Math.PI * 2);
   c.fill();
 }
 
@@ -85,7 +85,7 @@ export function drawBeam(c, x, y, w, h, spec) {
   c.beginPath();
   c.moveTo(hx, hy - 2);
   c.lineTo(hx + len, hy - 10);
-  c.lineTo(hx + len, GROUND_Y + 4);
+  c.lineTo(hx + len, y + h + 4);
   c.lineTo(hx, hy + 4);
   c.closePath();
   c.fill();

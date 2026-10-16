@@ -9,8 +9,12 @@
 <body>
   <div id="wrap">
     <header id="hud">
-      <div class="brand">FLYING TESLA</div>
+      <div class="brand">FLYING TESLA <span id="modeTag">NORMAL</span></div>
       <div class="scores">
+        <div class="stat">
+          <span>LEVEL</span>
+          <b id="level">1</b>
+        </div>
         <div class="stat">
           <span>SCORE</span>
           <b id="score">0</b>
@@ -20,15 +24,29 @@
           <b id="best">0</b>
         </div>
       </div>
-      <button id="muteBtn" type="button" aria-label="Mute sound">SOUND ON</button>
+      <button id="camBtn" class="pill" type="button" aria-label="Change camera">CAM · SIDE</button>
+      <button id="muteBtn" class="pill" type="button" aria-label="Mute sound">SOUND ON</button>
     </header>
 
     <canvas id="game" width="1280" height="720"></canvas>
 
+    <!-- "LEVEL 2" announcement; main.js restarts the animation each level. -->
+    <div id="banner" aria-live="polite"></div>
+
+    <!-- Touch controls (shown on touch screens): lanes on the left, flips by FLY. -->
+    <div class="touch-pad left">
+      <button class="touch-btn" id="laneUpBtn" type="button" aria-label="Lane up">▲</button>
+      <button class="touch-btn" id="laneDownBtn" type="button" aria-label="Lane down">▼</button>
+    </div>
+    <div class="touch-pad right">
+      <button class="touch-btn" id="spinBackBtn" type="button" aria-label="Backflip">↺</button>
+      <button class="touch-btn" id="spinFrontBtn" type="button" aria-label="Front flip">↻</button>
+    </div>
+
     <button id="flyBtn" type="button" aria-label="Fly">
       <span class="fly-label">FLY</span>
       <span class="hint">SPACE</span>
-      <!-- Cooldown overlay fills from the top as the ability recharges. -->
+      <!-- Cooldown overlay drains as the ability recharges. -->
       <i id="cooldownBar"></i>
     </button>
   </div>
@@ -36,11 +54,32 @@
   <div id="overlay" class="hidden" role="dialog" aria-labelledby="overlayTitle">
     <div class="card">
       <!-- Text is swapped by showOverlay() for the start and game over screens. -->
-      <p class="kicker" id="overlayKicker">RUN OVER</p>
-      <h1 id="overlayTitle">Game Over</h1>
-      <p class="result">Score <b id="finalScore">0</b> · Best <b id="finalBest">0</b></p>
-      <p class="result" id="overlayHelp" hidden>Tap <b>FLY</b> or press <b>Space</b> to hop over traffic.</p>
-      <button id="restartBtn" type="button">Restart</button>
+      <p class="kicker" id="overlayKicker">READY</p>
+      <h1 id="overlayTitle">Flying Tesla</h1>
+      <p class="result" id="overlayResult">
+        Score <b id="finalScore">0</b> · Best <b id="finalBest">0</b> · Level <b id="finalLevel">1</b>
+      </p>
+
+      <div class="modes" role="radiogroup" aria-label="Difficulty">
+        <button class="mode-btn" type="button" role="radio" data-mode="easy">Easy</button>
+        <button class="mode-btn" type="button" role="radio" data-mode="normal">Normal</button>
+        <button class="mode-btn" type="button" role="radio" data-mode="hard">Hard</button>
+      </div>
+
+      <ul class="controls keys">
+        <li><kbd>Space</kbd> fly over traffic</li>
+        <li><kbd>↑</kbd><kbd>↓</kbd> change lane</li>
+        <li><kbd>←</kbd><kbd>→</kbd> flip in the air</li>
+        <li><kbd>C</kbd> camera · <kbd>M</kbd> sound</li>
+      </ul>
+      <ul class="controls touch">
+        <li><b>FLY</b> hop over traffic</li>
+        <li><b>▲ ▼</b> or swipe: change lane</li>
+        <li><b>↺ ↻</b> hold in the air to flip</li>
+      </ul>
+      <p class="tip">Land upright after a flip for bonus points.</p>
+
+      <button id="restartBtn" type="button">Start</button>
     </div>
   </div>
 

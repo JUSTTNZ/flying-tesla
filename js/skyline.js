@@ -2,7 +2,7 @@
  * City skyline: three parallax layers, each pre-rendered once into an
  * offscreen canvas (re-rendered on resize) and tiled as it scrolls.
  */
-import { SIDEWALK_TOP, SKYLINE_PERIOD, W } from "./config.js";
+import { SIDEWALK_TOP, SKYLINE_PERIOD, VIEW_PAD, W } from "./config.js";
 import { glow, mod, rgbaTemplate, roundRect, seeded, shade } from "./utils.js";
 
 const LAYER_DEFS = [
@@ -53,19 +53,22 @@ export function advanceSkyline(scroll) {
   }
 }
 
-export function drawSkyline(c) {
+// `haze` is an rgba() template with "ALPHA", tinted to match the sky.
+export function drawSkyline(c, haze) {
   layers.forEach((layer, i) => {
-    // Draw the strip twice so it tiles across the screen as it wraps.
-    for (const base of [0, SKYLINE_PERIOD]) {
-      c.drawImage(layer.canvas, base - layer.offset - 200, 0, SKYLINE_PERIOD, SIDEWALK_TOP);
+    // Tile the strip across the screen plus the camera margins as it wraps.
+    for (const base of [-SKYLINE_PERIOD, 0, SKYLINE_PERIOD]) {
+      const x = base - layer.offset - 200;
+      if (x > W + VIEW_PAD || x + SKYLINE_PERIOD < -VIEW_PAD) continue;
+      c.drawImage(layer.canvas, x, 0, SKYLINE_PERIOD, SIDEWALK_TOP);
     }
     // Haze between layers pushes the farther ones back.
     if (i < layers.length - 1) {
-      const haze = c.createLinearGradient(0, 150, 0, SIDEWALK_TOP);
-      haze.addColorStop(0, "rgba(40, 50, 100, 0)");
-      haze.addColorStop(1, `rgba(110, 80, 130, ${i === 0 ? 0.35 : 0.18})`);
-      c.fillStyle = haze;
-      c.fillRect(0, 150, W, SIDEWALK_TOP - 150);
+      const g = c.createLinearGradient(0, 150, 0, SIDEWALK_TOP);
+      g.addColorStop(0, haze.replace("ALPHA", 0));
+      g.addColorStop(1, haze.replace("ALPHA", i === 0 ? 0.35 : 0.18));
+      c.fillStyle = g;
+      c.fillRect(-VIEW_PAD, 150, W + VIEW_PAD * 2, SIDEWALK_TOP - 150);
     }
   });
 }

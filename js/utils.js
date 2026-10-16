@@ -8,6 +8,24 @@ export const easeInOut = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 
 // Positive modulo, so wrapped positions never go negative.
 export const mod = (v, m) => ((v % m) + m) % m;
 
+// Angle wrapped into -π..π (0 = upright).
+export const wrapAngle = (a) => mod(a + Math.PI, Math.PI * 2) - Math.PI;
+
+// "#rrggbb" → [r, g, b]
+export function hexToRgb(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return [n >> 16, (n >> 8) & 255, n & 255];
+}
+
+// Move colour `a` (an [r, g, b] array, modified in place) toward `b` by k.
+export function lerpRgb(a, b, k) {
+  for (let i = 0; i < 3; i++) a[i] += (b[i] - a[i]) * k;
+  return a;
+}
+
+export const rgbStr = (c, alpha = 1) =>
+  `rgba(${c[0] | 0}, ${c[1] | 0}, ${c[2] | 0}, ${alpha})`;
+
 // Deterministic 0..1 noise from an integer — keeps street props stable.
 export const hash = (n) => mod(Math.sin(n * 127.1 + 311.7) * 43758.5453, 1);
 
