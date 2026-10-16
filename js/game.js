@@ -21,6 +21,10 @@ const TAU = Math.PI * 2;
 
 const WOW = ["Whoa!", "Wow!", "It flies?!", "No way!", "Cool!", "Is that a Tesla?", "Look up!", "Amazing!"];
 const OUCH = ["Oh no!", "Ouch!", "Yikes!", "Call someone!", "Not again…"];
+// Grok Bots say these instead.
+const BOT_WOW = ["Nice flip, human.", "Trajectory: optimal", "Beep boop!", "Impressive.", "Logging that jump"];
+const BOT_OUCH = ["Error 404: road", "Rebooting…", "That was suboptimal", "Beep… oops"];
+const BOT_CHATTER = ["Hello, human!", "I grok traffic.", "Charging…", "Beep boop!", "Ask me anything", "To Mars!"];
 const CHATTER = ["Nice night!", "Taxi!", "Hey!", "So much traffic…", "Love this city", "Coffee?", "Running late!", "Hi!"];
 
 // `running` is false on the start screen and after a crash.
@@ -91,7 +95,7 @@ export function tryFly(state) {
   p.glow = 1;
   p.rot = p.targetRot = 0;
   audio.takeoff();
-  reactNearby(state, WOW, 0.5, 3);
+  reactNearby(state, WOW, BOT_WOW, 0.5, 3);
 }
 
 // Start a full flip (dir 1 = front, -1 = back). Ignored on the ground, when
@@ -252,17 +256,20 @@ function ambientHonks(state, dt) {
 // Pedestrians talking
 // ---------------------------------------------------------------------------
 
-// People near the Tesla react (on takeoff, on crash).
-function reactNearby(state, lines, chance, max) {
-  let n = 0;
+// People (and bots) near the Tesla react (on takeoff, on crash).
+function reactNearby(state, lines, botLines, chance, max) {
+  let people = 0;
+  let bots = 0;
   for (const ped of state.peds) {
-    if (n >= max) break;
+    if (people + bots >= max) break;
     if (Math.abs(ped.x - PX) < 380 && Math.random() < chance) {
-      pedSay(ped, pick(lines), n * 0.25);
-      n++;
+      pedSay(ped, pick(ped.robot ? botLines : lines), (people + bots) * 0.25);
+      if (ped.robot) bots++;
+      else people++;
     }
   }
-  if (n) audio.cheer(panAt(PX + 100));
+  if (people) audio.cheer(panAt(PX + 100));
+  if (bots) audio.robot(panAt(PX + 100), 0.2);
 }
 
 function ambientChatter(state, dt) {
@@ -272,8 +279,9 @@ function ambientChatter(state, dt) {
   const visible = state.peds.filter((p) => p.x > 60 && p.x < W - 60 && !p.bubbleT);
   if (!visible.length) return;
   const ped = pick(visible);
-  pedSay(ped, pick(CHATTER));
-  audio.chatter(panAt(ped.x));
+  pedSay(ped, pick(ped.robot ? BOT_CHATTER : CHATTER));
+  if (ped.robot) audio.robot(panAt(ped.x));
+  else audio.chatter(panAt(ped.x));
 }
 
 // ---------------------------------------------------------------------------
@@ -422,7 +430,7 @@ function crash(state, reason) {
   state.crashReason = reason;
   state.shake = 10;
   audio.crash();
-  reactNearby(state, OUCH, 0.6, 3);
+  reactNearby(state, OUCH, BOT_OUCH, 0.6, 3);
   state.best = saveBest(state.mode, state.score);
   return "crash";
 }

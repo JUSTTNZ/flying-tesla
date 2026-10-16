@@ -66,11 +66,21 @@
         <button class="mode-btn" type="button" role="radio" data-mode="hard">Hard</button>
       </div>
 
+      <div class="colors" role="radiogroup" aria-label="Tesla colour">
+        <span>Your Tesla</span>
+        <button class="color-btn" type="button" role="radio" data-color="white">
+          <i style="background:#eef2f7"></i>White
+        </button>
+        <button class="color-btn" type="button" role="radio" data-color="black">
+          <i style="background:#22272f"></i>Black
+        </button>
+      </div>
+
       <ul class="controls keys">
         <li><kbd>Space</kbd> fly over traffic</li>
         <li><kbd>↑</kbd><kbd>↓</kbd> change lane</li>
         <li><kbd>←</kbd><kbd>→</kbd> flip in the air (hold for more)</li>
-        <li><kbd>C</kbd> camera · <kbd>M</kbd> sound</li>
+        <li><kbd>C</kbd> camera · <kbd>T</kbd> car colour · <kbd>M</kbd> sound</li>
       </ul>
       <ul class="controls touch">
         <li><b>FLY</b> hop over traffic</li>
@@ -80,6 +90,7 @@
       <p class="tip">Every flip you land scores +300.</p>
 
       <button id="restartBtn" type="button">Start</button>
+      <p class="fine">Fan-made game · not affiliated with Tesla, SpaceX or xAI</p>
     </div>
   </div>
 

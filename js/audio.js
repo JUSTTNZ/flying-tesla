@@ -80,6 +80,7 @@ export const audio = {
     const t = this.ctx.currentTime + delay;
     const src = this.ctx.createBufferSource();
     src.buffer = this.noiseBuf;
+    src.loop = true; // long sounds outlast the 2s buffer
     const f = this.ctx.createBiquadFilter();
     f.type = type;
     f.Q.value = q;
@@ -166,6 +167,21 @@ export const audio = {
       });
       d += dur + rand(0.02, 0.06);
     }
+  },
+
+  // Grok Bot talking: quick square-wave bleeps.
+  robot(pan = 0, delay = 0) {
+    let d = delay;
+    for (let i = 0; i < 4 + ((Math.random() * 3) | 0); i++) {
+      const f = rand(600, 1500);
+      this.voice({ type: "square", freq: f, slide: f * rand(0.8, 1.3), dur: 0.06, gain: 0.025, delay: d, pan, filter: ["lowpass", 3000, 1] });
+      d += rand(0.06, 0.1);
+    }
+  },
+
+  // Distant rocket launch: a long low rumble.
+  rocket(pan = 0) {
+    this.noise({ dur: 5, gain: 0.07, type: "lowpass", f0: 260, f1: 90, q: 0.7, pan, attack: 1.2 });
   },
 
   // People reacting to a flying car.

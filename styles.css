@@ -333,3 +333,38 @@ body {
   .touch-pad.right { right: 132px; }
   .touch-btn { width: 46px; height: 46px; font-size: 18px; }
 }
+
+/* Tesla colour picker */
+.colors {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: -6px 0 16px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.color-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: transparent;
+  color: var(--ink);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.color-btn i {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+.color-btn[aria-checked="true"] { border-color: var(--accent); background: rgba(62, 198, 255, 0.15); }
+
+.fine { margin-top: 14px; font-size: 10px; color: var(--muted); opacity: 0.7; }

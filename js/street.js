@@ -1,10 +1,12 @@
 /**
- * Street level: pavements, road markings, trees, street lamps and the
- * pedestrians walking along the far pavement (with speech bubbles).
+ * Street level: pavements, road markings, trees, street lamps, billboards and
+ * the pedestrians and Grok Bot robots walking along the far pavement (with
+ * speech bubbles).
  *
  * Everything is drawn VIEW_PAD px past the screen edges so zoomed-out and
  * tilted cameras never show a gap.
  */
+import { drawBillboards } from "./billboards.js";
 import { H, LANES, ROAD_BOTTOM, ROAD_TOP, SIDEWALK_TOP, VIEW_PAD, W } from "./config.js";
 import { glow, hash, mod, pick, rand, roundRect, shade } from "./utils.js";
 
@@ -33,6 +35,7 @@ export function makePed(x) {
     pants: pick(PANTS),
     longHair: Math.random() < 0.4,
     bag: Math.random() < 0.3 ? pick(BAGS) : null,
+    robot: Math.random() < 0.18, // a Grok Bot instead of a person
     bubble: "", // what they're saying
     bubbleT: 0, // seconds left showing it (a negative value is a start delay)
   };
@@ -73,6 +76,10 @@ export function updatePeds(state, dt, scrollSpeed) {
 
 // A walking figure with swinging arms and legs; feet at (ped.x, ped.y).
 export function drawPed(c, ped) {
+  if (ped.robot) {
+    drawRobot(c, ped);
+    return;
+  }
   const s = ped.scale;
   const x = ped.x;
   const hip = ped.y - 15 * s;
@@ -134,6 +141,50 @@ export function drawPed(c, ped) {
   // Speech bubble (after any start delay), fading out at the end.
   const shown = ped.bubbleT > 0 && ped.bubbleT <= 1.8;
   if (shown && ped.bubble) drawBubble(c, x, hy - 10 * s, ped.bubble, Math.min(1, ped.bubbleT * 3));
+}
+
+// Grok Bot: white humanoid robot with a black visor and glowing eye strip.
+function drawRobot(c, ped) {
+  const s = ped.scale * 1.05;
+  const x = ped.x;
+  const hip = ped.y - 16 * s;
+  const shoulder = hip - 15 * s;
+  const swing = Math.sin(ped.phase) * 0.42;
+  const limb = (x0, y0, a, len, color, width) => {
+    c.strokeStyle = color;
+    c.lineWidth = width;
+    c.beginPath();
+    c.moveTo(x0, y0);
+    c.lineTo(x0 + Math.sin(a) * len, y0 + Math.cos(a) * len);
+    c.stroke();
+  };
+
+  c.lineCap = "round";
+  limb(x, hip, -swing, 16 * s, "#8e98a6", 4 * s); // far leg
+  limb(x, shoulder + 2 * s, swing, 12 * s, "#8e98a6", 3 * s); // far arm
+  limb(x, hip, swing, 16 * s, "#dfe5ec", 4 * s); // near leg
+  // Torso with a chest light.
+  c.fillStyle = "#eef2f7";
+  roundRect(c, x - 5 * s, shoulder, 10 * s, 17 * s, 4 * s);
+  c.fill();
+  c.fillStyle = "#1a1f27";
+  c.fillRect(x - 3 * s, hip - 4 * s, 6 * s, 3 * s); // waist joint
+  glow(c, x + ped.dir * 1.5 * s, shoulder + 6 * s, 5 * s, "rgba(80, 230, 255, ALPHA)", 0.9);
+  limb(x, shoulder + 2 * s, -swing, 12 * s, "#dfe5ec", 3 * s); // near arm
+  // Head: white shell, black visor, cyan eye strip facing the walking direction.
+  const hy = shoulder - 7.5 * s;
+  c.fillStyle = "#f4f7fb";
+  roundRect(c, x - 5 * s, hy - 5 * s, 10 * s, 10.5 * s, 4 * s);
+  c.fill();
+  c.fillStyle = "#0b0f16";
+  roundRect(c, x - 3.5 * s + ped.dir * 1.2 * s, hy - 2 * s, 7 * s, 4 * s, 2 * s);
+  c.fill();
+  c.fillStyle = "#5ee8ff";
+  c.fillRect(x - 2.5 * s + ped.dir * 1.6 * s, hy - 0.5 * s, 5 * s, 1.2 * s);
+
+  if (ped.bubbleT > 0 && ped.bubbleT <= 1.8 && ped.bubble) {
+    drawBubble(c, x, hy - 8 * s, ped.bubble, Math.min(1, ped.bubbleT * 3));
+  }
 }
 
 function drawBubble(c, x, y, text, alpha) {
@@ -267,8 +318,9 @@ export function drawLamps(c, distance) {
 }
 
 // Everything from the far pavement to the near kerb, back to front.
-export function drawStreet(c, state) {
+export function drawStreet(c, state, clock) {
   drawPavement(c, state.distance, SIDEWALK_TOP, ROAD_TOP);
+  drawBillboards(c, state.distance, clock);
   drawTrees(c, state.distance);
   for (const ped of state.peds) drawPed(c, ped);
   drawLamps(c, state.distance);

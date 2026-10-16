@@ -23,6 +23,7 @@ Open http://localhost:5173
 | Change lane | ↑ / ↓ (or W / S) | ▲ ▼ buttons or swipe |
 | Flip while in the air (tap = one flip, hold = keep flipping) | ← / → (or A / D) | ↺ ↻ |
 | Change camera (Side, Chase, Cinematic, Wide) | C | CAM button |
+| Tesla colour (white / black) | T | picker on the menu |
 | Mute | M | SOUND button |
 | Pick difficulty on the menu | 1 / 2 / 3 | Easy / Normal / Hard |
 | Start / restart | Space or R | Start button |
@@ -41,6 +42,14 @@ Open http://localhost:5173
   pack that one hop can clear, or far enough apart to land, recharge and hop
   again. Switching lanes gives you more ways out.
 
+## The city
+
+Billboards along the street advertise SpaceX, xAI, Grok, Starship and Grok
+Bots; Grok Bot robots walk among the pedestrians (and talk back); and every so
+often a Starship launches behind the skyline. This is fan homage: brand names
+are styled text, not official logos, and the game is not affiliated with
+Tesla, SpaceX or xAI.
+
 ## Sound
 
 All sound is synthesized with the Web Audio API: car horns (cars also honk
@@ -54,10 +63,11 @@ and thrusters, city rumble, crowd murmur, and people chattering and cheering
 | --- | --- |
 | `js/main.js` | Entry point: DOM, keyboard/touch input, HUD, menu, game loop |
 | `js/game.js` | State and simulation: lanes, flight and flips, traffic, levels, scoring, honks |
-| `js/renderer.js` | Camera modes, level sky palettes, frame drawing, HiDPI sizing |
+| `js/renderer.js` | Camera modes, level sky palettes, rocket launches, frame drawing, HiDPI sizing |
 | `js/vehicles.js` | Car shapes (Tesla, sedan, hatch, SUV, van, pickup) and drawing |
 | `js/skyline.js` | Three parallax building layers, pre-rendered offscreen |
-| `js/street.js` | Pavements, lanes, trees, lamps, pedestrians and speech bubbles |
+| `js/street.js` | Pavements, lanes, trees, lamps, pedestrians, Grok Bots, speech bubbles |
+| `js/billboards.js` | Roadside billboards and their ads |
 | `js/audio.js` | Web Audio: ambience beds and one-shot effects |
 | `js/storage.js` | Best score per mode and preferences in localStorage |
 | `js/config.js` | Tuning values, difficulty modes, cameras, scene layout |

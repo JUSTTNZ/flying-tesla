@@ -1,18 +1,17 @@
 /**
  * Draws a frame of the scene. Owns the canvas (sized to CSS size ×
- * devicePixelRatio so it stays sharp), the camera, and the sky palette that
- * changes with each level.
+ * devicePixelRatio so it stays sharp), the camera, the sky palette that
+ * changes with each level, and the occasional rocket launch in the distance.
  */
+import { audio } from "./audio.js";
 import {
   FLY_DURATION, H, HOP_HEIGHT, PLAYER_DRAW_H, PLAYER_SCREEN_X, SIDEWALK_TOP,
-  VIEW_PAD, W, laneGround,
+  TESLA_COLORS, VIEW_PAD, W, laneGround,
 } from "./config.js";
 import { drawSkyline, renderSkyline } from "./skyline.js";
 import { drawStreet } from "./street.js";
-import { clamp, glow, hexToRgb, lerpRgb, polyPath, rgbStr, wrapAngle } from "./utils.js";
+import { clamp, glow, hexToRgb, lerpRgb, polyPath, rand, rgbStr, wrapAngle } from "./utils.js";
 import { VEHICLES, drawBeam, drawShadow, drawVehicle } from "./vehicles.js";
-
-const TESLA_SHADES = ["#ffffff", "#eef2f7", "#b9c4d2"];
 
 // Sky per level (cycling): four gradient stops top → horizon, plus haze tint.
 const PALETTES = [
@@ -29,6 +28,28 @@ export function createRenderer(canvas) {
   const sky = { stops: PALETTES[0].sky.map((c) => [...c]), haze: [...PALETTES[0].haze] };
   // Camera: world point at screen centre, zoom and roll; eased toward a target.
   const cam = { x: W / 2, y: H / 2, zoom: 1, rot: 0 };
+  // Distant rocket: rises from behind the skyline every so often.
+  const rocket = { active: false, x: 0, t: 0, next: 6, trail: [] };
+
+  function updateRocket(dt) {
+    if (!rocket.active) {
+      rocket.next -= dt;
+      if (rocket.next <= 0) {
+        Object.assign(rocket, { active: true, x: rand(W * 0.12, W * 0.88), t: 0, trail: [] });
+        audio.rocket(clamp((rocket.x - W / 2) / (W / 2), -1, 1));
+      }
+      return;
+    }
+    rocket.t += dt;
+    const pos = rocketPos(rocket);
+    rocket.trail.push({ x: pos.x, y: pos.y, age: 0 });
+    for (const puff of rocket.trail) puff.age += dt;
+    rocket.trail = rocket.trail.filter((puff) => puff.age < 3);
+    if (rocket.t > 12) {
+      rocket.active = false;
+      rocket.next = rand(25, 45);
+    }
+  }
 
   function resize() {
     const cssW = canvas.getBoundingClientRect().width || W;
@@ -71,8 +92,8 @@ export function createRenderer(canvas) {
     for (const key of ["x", "y", "zoom", "rot"]) cam[key] += (t[key] - cam[key]) * k;
   }
 
-  // `clock` drives ambient animation (twinkling stars).
-  function draw(state, { clock, dt, camera }) {
+    // `clock` drives ambient animation; `teslaColor` is a TESLA_COLORS key.
+  function draw(state, { clock, dt, camera, teslaColor }) {
     // Ease the sky toward this level's palette.
     const pal = PALETTES[(state.level - 1) % PALETTES.length];
     const k = Math.min(1, dt * 0.8);
@@ -87,10 +108,12 @@ export function createRenderer(canvas) {
     ctx.scale(cam.zoom, cam.zoom);
     ctx.translate(-cam.x, -cam.y);
 
+    updateRocket(dt);
     drawSky(ctx, state.stars, clock, sky.stops);
+    if (rocket.active) drawRocket(ctx, rocket, clock);
     drawSkyline(ctx, rgbStr(sky.haze, "ALPHA"));
-    drawStreet(ctx, state);
-    drawTraffic(ctx, state);
+    drawStreet(ctx, state, clock);
+    drawTraffic(ctx, state, TESLA_COLORS[teslaColor] || TESLA_COLORS.white);
     drawPopups(ctx, state.popups);
   }
 
@@ -100,7 +123,7 @@ export function createRenderer(canvas) {
 
 // Cars far lane → near lane, with the Tesla slotted into its own lane
 // (or on top of everything while flying).
-function drawTraffic(c, state) {
+function drawTraffic(c, state, teslaShades) {
   const p = state.player;
   // Headlight beams first so no beam paints over another car's body.
   c.globalCompositeOperation = "lighter";
@@ -111,7 +134,7 @@ function drawTraffic(c, state) {
   let teslaDrawn = false;
   for (const car of state.cars) {
     if (!teslaDrawn && !p.flying && car.lane > p.lanePos + 0.01) {
-      drawTesla(c, p);
+      drawTesla(c, p, teslaShades);
       teslaDrawn = true;
     }
     const ground = laneGround(car.lane);
@@ -120,7 +143,7 @@ function drawTraffic(c, state) {
     drawVehicle(c, car.x, y, car.w, car.h, car.spec, car.shades, car.wheelAngle);
     if (car.honkT > 0) drawHonk(c, car, y);
   }
-  if (!teslaDrawn) drawTesla(c, p);
+  if (!teslaDrawn) drawTesla(c, p, teslaShades);
 }
 
 // Sound lines and a "HONK!" over a honking car.
@@ -172,7 +195,7 @@ function drawSky(c, stars, clock, stops) {
   c.fill();
 }
 
-function drawTesla(c, p) {
+function drawTesla(c, p, shades) {
   const x = PLAYER_SCREEN_X;
   const y = p.y;
   const ground = laneGround(p.lanePos);
@@ -208,13 +231,59 @@ function drawTesla(c, p) {
   c.translate(cx, cy);
   c.rotate(p.rot + arcTilt + laneLean);
   c.translate(-cx, -cy);
-  drawVehicle(c, x, y, p.w, PLAYER_DRAW_H, VEHICLES.tesla, TESLA_SHADES, p.wheelAngle);
+  drawVehicle(c, x, y, p.w, PLAYER_DRAW_H, VEHICLES.tesla, shades, p.wheelAngle);
+  // A thin light rim keeps a black car visible against the night road.
+  if (shades === TESLA_COLORS.black) {
+    polyPath(c, VEHICLES.tesla.body, x, y, p.w, PLAYER_DRAW_H);
+    c.strokeStyle = "rgba(200, 220, 255, 0.35)";
+    c.lineWidth = 1.2;
+    c.stroke();
+  }
   // Glass roof and a chrome door handle make it read as "Tesla-style".
   c.fillStyle = "rgba(20, 30, 45, 0.85)";
   polyPath(c, [[0.37, 0.07], [0.56, 0.05], [0.6, 0.09], [0.38, 0.11]], x, y, p.w, PLAYER_DRAW_H);
   c.fill();
   c.fillStyle = "#c9d2de";
   c.fillRect(x + p.w * 0.56, y + PLAYER_DRAW_H * 0.46, 8, 2);
+  c.restore();
+}
+
+// Rocket path: rises from behind the skyline, arcing slightly downrange.
+function rocketPos(r) {
+  const u = r.t / 12;
+  return { x: r.x + u * u * 260, y: SIDEWALK_TOP - 120 - u * u * 720 };
+}
+
+function drawRocket(c, r, clock) {
+  // Exhaust trail: puffs that grow and fade.
+  for (const puff of r.trail) {
+    c.fillStyle = `rgba(200, 205, 220, ${0.22 * (1 - puff.age / 3)})`;
+    c.beginPath();
+    c.arc(puff.x, puff.y + 14, 3 + puff.age * 7, 0, Math.PI * 2);
+    c.fill();
+  }
+  const { x, y } = rocketPos(r);
+  const flicker = 1 + Math.sin(clock * 40) * 0.2;
+  glow(c, x, y + 16, 26 * flicker, "rgba(255, 170, 60, ALPHA)", 0.9);
+  // Steel body, slightly tilted downrange.
+  c.save();
+  c.translate(x, y);
+  c.rotate(0.06 + (r.t / 12) * 0.25);
+  c.fillStyle = "#dfe4ec";
+  c.beginPath();
+  c.moveTo(-3.5, 12);
+  c.lineTo(-3.5, -12);
+  c.quadraticCurveTo(0, -20, 3.5, -12);
+  c.lineTo(3.5, 12);
+  c.closePath();
+  c.fill();
+  c.fillStyle = "#ffd27a";
+  c.beginPath();
+  c.moveTo(-3, 12);
+  c.lineTo(3, 12);
+  c.lineTo(0, 22 + 4 * flicker);
+  c.closePath();
+  c.fill();
   c.restore();
 }
 

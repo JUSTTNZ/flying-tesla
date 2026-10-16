@@ -31,6 +31,12 @@ export const MODES = {
   hard: { label: "Hard", speed: 1.15, cooldown: 1.4, room: 2.2, roomMin: 0.5, pack: 0.18, packMax: 0.5, levelDist: 8000 },
 };
 
+// Tesla paint choices: [highlight, base, shadow] shades for the body gradient.
+export const TESLA_COLORS = {
+  white: ["#ffffff", "#eef2f7", "#b9c4d2"],
+  black: ["#5a6372", "#22272f", "#0a0c10"],
+};
+
 // Camera modes, cycled with C / the CAM button (see renderer.js).
 export const CAMERAS = ["side", "chase", "cinematic", "wide"];
 

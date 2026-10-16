@@ -11,7 +11,7 @@
  *   audio.js     Web Audio sound         storage.js  best scores & prefs
  */
 import { audio } from "./audio.js";
-import { CAMERAS, MODES } from "./config.js";
+import { CAMERAS, MODES, TESLA_COLORS } from "./config.js";
 import { changeLane, createState, flip, tryFly, update } from "./game.js";
 import { createRenderer } from "./renderer.js";
 import { loadPrefs, savePrefs } from "./storage.js";
@@ -25,11 +25,13 @@ const overlay = $("overlay");
 const restartBtn = $("restartBtn");
 const banner = $("banner");
 const modeBtns = [...document.querySelectorAll(".mode-btn")];
+const colorBtns = [...document.querySelectorAll(".color-btn")];
 
 // Remembered choices.
-const prefs = { mode: "normal", camera: "side", muted: false, ...loadPrefs() };
+const prefs = { mode: "normal", camera: "side", muted: false, teslaColor: "white", ...loadPrefs() };
 if (!MODES[prefs.mode]) prefs.mode = "normal";
 if (!CAMERAS.includes(prefs.camera)) prefs.camera = "side";
+if (!TESLA_COLORS[prefs.teslaColor]) prefs.teslaColor = "white";
 audio.setMuted(prefs.muted);
 
 const renderer = createRenderer($("game"));
@@ -59,6 +61,7 @@ function updateLabels() {
   camBtn.textContent = `CAM · ${prefs.camera.toUpperCase()}`;
   muteBtn.textContent = prefs.muted ? "SOUND OFF" : "SOUND ON";
   for (const b of modeBtns) b.setAttribute("aria-checked", String(b.dataset.mode === prefs.mode));
+  for (const b of colorBtns) b.setAttribute("aria-checked", String(b.dataset.color === prefs.teslaColor));
 }
 
 // One overlay serves as both the start screen and the game over screen.
@@ -122,6 +125,17 @@ function cycleCamera() {
   updateLabels();
 }
 
+function setColor(color) {
+  if (!TESLA_COLORS[color]) return;
+  prefs.teslaColor = color;
+  savePrefs(prefs);
+  updateLabels();
+}
+
+function toggleColor() {
+  setColor(prefs.teslaColor === "white" ? "black" : "white");
+}
+
 function toggleMute() {
   prefs.muted = !prefs.muted;
   savePrefs(prefs);
@@ -153,6 +167,7 @@ addEventListener("keydown", (e) => {
     flip(state, 1);
   }
   if (k === "KeyC") cycleCamera();
+  if (k === "KeyT") toggleColor();
   if (k === "KeyM") toggleMute();
   if (k === "KeyR" && !state.running) start();
   if (!state.running && ["Digit1", "Digit2", "Digit3"].includes(k)) {
@@ -223,6 +238,7 @@ restartBtn.addEventListener("click", start);
 muteBtn.addEventListener("click", toggleMute);
 camBtn.addEventListener("click", cycleCamera);
 for (const b of modeBtns) b.addEventListener("click", () => setMode(b.dataset.mode));
+for (const b of colorBtns) b.addEventListener("click", () => setColor(b.dataset.color));
 addEventListener("resize", renderer.resize);
 
 // ---------------------------------------------------------------------------
@@ -243,7 +259,7 @@ function frame(now) {
   }
   updateHud();
   audio.update({ running: state.running, speed: state.scrollSpeed, thrust: state.player.glow });
-  renderer.draw(state, { clock, dt, camera: prefs.camera });
+  renderer.draw(state, { clock, dt, camera: prefs.camera, teslaColor: prefs.teslaColor });
   requestAnimationFrame(frame);
 }
 
